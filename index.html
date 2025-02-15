@@ -1369,7 +1369,7 @@ class LayerManager {
   selectMouseOverEvent(event) {
     let activePixel = canvas.getPixelById(event.target.id);
     let layerOver = layerManager.getLayerByPixelId(activePixel.id());
-    layerOver ? canvas.setCursor("move"): canvas.setCursor("default");
+    layerOver ? canvas.setCursor("pointer"): canvas.setCursor("default");
     // Ascending
     for (let layer of this.getLayersOrderedByZindex()) {
       for (var resizePixel of layer.getResizePixels()) {
@@ -1614,7 +1614,7 @@ class Layer {
   static drawMouseOver() {
     let activePixel = canvas.getPixelById(event.target.id);
     let layerOver = layerManager.getLayerByPixelId(activePixel.id());
-    layerOver ? canvas.setCursor("move"): canvas.setCursor("crosshair");
+    layerOver ? canvas.setCursor("pointer"): canvas.setCursor("crosshair");
   }
 
   static selectMouseDownEvent(event) {
