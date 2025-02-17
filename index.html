@@ -237,7 +237,7 @@ class ThemeManager {
 class ModeMaster {
 
   constructor() {
-    this._modes = [];
+    this._modes = ["select"];
     this.callbacks = [];
   }
 
@@ -300,6 +300,11 @@ class ModeMaster {
 
   is(...modes) {
     return this._modes.toString() == modes.toString();
+  }
+
+  isDrawyMode(layerMode) {
+    // Returns for any draw-related mode (for a given layer).
+    return this.hasOr("draw", "drawing", "writing") && this.has(layerMode);
   }
 
   removeLayerModes() {
@@ -561,10 +566,10 @@ class CharManager {
       "┗": ["corner", "solid-bold", "bottom-left", "unicode"],
       "┛": ["corner", "solid-bold", "bottom-right", "unicode"],
 
-      "┌": ["corner", "solid-thin", "top-left", "unicode"],
-      "┐": ["corner", "solid-thin", "top-right", "unicode"],
-      "└": ["corner", "solid-thin", "bottom-left", "unicode"],
-      "┘": ["corner", "solid-thin", "bottom-right", "unicode"],
+      "┌": ["corner", "dashed", "solid-thin", "top-left", "unicode"],
+      "┐": ["corner", "dashed", "solid-thin", "top-right", "unicode"],
+      "└": ["corner", "dashed", "solid-thin", "bottom-left", "unicode"],
+      "┘": ["corner", "dashed", "solid-thin", "bottom-right", "unicode"],
 
       "·": ["diamond-corner", "solid-thin", "solid-bold", "vertical", "lateral", "unicode"],
 
@@ -1582,11 +1587,11 @@ class Layer {
     return randomInt(1, 10000000).toString();
   }
 
-  static drawMouseDownEvent(event) {
-    let activePixel = canvas.getPixelById(event.target.id);
+  static drawToSelectMouseDownEvent(event) {
     // Just a little side hussle to auto-switch to selecting
     // if drawing but an existing layer was touched.
-    let selectLayer = layerManager.getLayerByPixelId(activePixel.id())
+    let activePixel = canvas.getPixelById(event.target.id);
+    let selectLayer = layerManager.getLayerByPixelId(activePixel.id());
     if (
       selectLayer
       && !selectLayer.hasJointPixel(activePixel.id())
@@ -1594,9 +1599,13 @@ class Layer {
     ) {
       modeMaster.reset("select");
       Layer.selectMouseDownEvent(event);
-      return;
+      return true;
     }
+    return false;
+  }
 
+  static drawMouseDownEvent(event) {
+    if (Layer.drawToSelectMouseDownEvent(event)) return;
     // Otherwise we go ahead and create a new layer.
     let layerType = modeMaster.getLayerType();
     let layerClass = layerManager.getLayerClassByType(layerType);
@@ -1614,7 +1623,13 @@ class Layer {
   static drawMouseOver() {
     let activePixel = canvas.getPixelById(event.target.id);
     let layerOver = layerManager.getLayerByPixelId(activePixel.id());
-    layerOver ? canvas.setCursor("pointer"): canvas.setCursor("crosshair");
+    if (modeMaster.has("text") && (!layerOver || layerOver.is("text"))) {
+      canvas.setCursor("text");
+    } else if (layerOver) {
+      canvas.setCursor("pointer");
+    } else {
+      canvas.setCursor("crosshair");
+    }
   }
 
   static selectMouseDownEvent(event) {
@@ -2127,6 +2142,7 @@ class TextLayer extends Layer {
   }
 
   static drawMouseDownEvent(event) {
+    if (Layer.drawToSelectMouseDownEvent(event)) return;
     let activePixel = canvas.getPixelById(event.target.id);
     if (!TextLayer.focusedOtherTextLayer(activePixel)) {
       let layer = new TextLayer(event.target.id);
@@ -2160,7 +2176,13 @@ class TextLayer extends Layer {
     // Unselect / remove cursor from any previous editing text layer.
     if (layerManager.editingTextLayer) {
       layerManager.editingTextLayer.clearLastCursor();
-      layerManager.editingTextLayer.unselect();
+
+      // If the current editing text is selected, it should become unselected given
+      // a new text layer has been selected for editing, though in a table this doesn't make
+      // visual sense as the whole table is selected as a group.
+      if (layerManager.editingTextLayer.isSelected() && !layerManager.editingTextLayer.hasTable()) {
+        layerManager.editingTextLayer.unselect();
+      }
     }
 
     // Setup the newly selected layer (might be the same).
@@ -2434,7 +2456,7 @@ class BaseLineLayer extends Layer {
       for (var jointPixel of layer.getJointPixels()) {
         if (activePixel.isNear(jointPixel) && layerManager.layerPixelIsVisible(layer, jointPixel)) {
           jointPixel.renderJointNear();
-          if (activePixel.is(jointPixel)) canvas.setCursor("crosshair");
+          if (activePixel.is(jointPixel)) canvas.setCursor(modeMaster.has("text")? "text": "crosshair");
         } else {
           jointPixel.renderWasSelected();
         }
@@ -4337,17 +4359,17 @@ class MenuButtonComponent extends ButtonComponent {
     this.showCondition = modeMaster.makeFunc(showCondition);
     this.callback = callback;
     this.setModes = modeMaster.makeFunc(setModes);
-    this.activeModes = activeModes;
+    this.activeModesCondition = activeModes.length? modeMaster.makeFunc(activeModes): () => false;
   }
 
   on_mouseDown() {
     this.setModes();
     this.callback();
-    if (!this.activeModes.length) super.on_mouseDown();
+    if (!this.activeModesCondition()) super.on_mouseDown();
   }
 
   on_mouseUp() {
-    if (!this.activeModes.length) super.on_mouseUp();
+    if (!this.activeModesCondition()) super.on_mouseUp();
   }
 
 
@@ -4359,7 +4381,7 @@ class MenuButtonComponent extends ButtonComponent {
   }
 
   isActive() {
-    return this.activeModes.length && modeMaster.hasOr(...this.activeModes);
+    return this.activeModesCondition();
   }
 
   refresh() {
@@ -4412,27 +4434,27 @@ class MainMenuComponent extends MenuComponent {
 
   buttons = [
     new MenuButtonComponent("➤", "Select",
-      [], [modeMaster.reset, "select"], ["selected", "select"], () => layerManager.switchModeCallback()),
+      [], [modeMaster.reset, "select"], [modeMaster.hasOr, "selected", "select"], () => layerManager.switchModeCallback()),
     new MenuButtonComponent("◻", "Square",
-      [], [modeMaster.reset, "draw", "square", "dsbutton"], ["dsbutton"], () => layerManager.switchModeCallback()),
+      [], [modeMaster.reset, "draw", "square"], [modeMaster.isDrawyMode, "square"], () => layerManager.switchModeCallback()),
     new MenuButtonComponent("◯", "Circle",
-      [], [modeMaster.reset, "draw", "circle", "cbutton"], ["cbutton"], () => layerManager.switchModeCallback()),
+      [], [modeMaster.reset, "draw", "circle"], [modeMaster.isDrawyMode, "circle"], () => layerManager.switchModeCallback()),
     new MenuButtonComponent("t",  "Text",
-      [], [modeMaster.reset, "draw", "text", "dtbutton"], ["writing", "dtbutton"], () => layerManager.switchModeCallback()),
+      [], [modeMaster.reset, "draw", "text"], [modeMaster.isDrawyMode, "text"], () => layerManager.switchModeCallback()),
     new MenuButtonComponent("/", " Line",
-      [], [modeMaster.reset, "draw", "line", "free-line", "dflbutton"], ["dflbutton"], () => layerManager.switchModeCallback()),
+      [], [modeMaster.reset, "draw", "line", "free-line"], [modeMaster.isDrawyMode, "free-line"], () => layerManager.switchModeCallback()),
     new MenuButtonComponent("_|", "Step",
-      [], [modeMaster.reset, "draw", "line", "step-line", "dslbutton"], ["dslbutton"], () => layerManager.switchModeCallback()),
+      [], [modeMaster.reset, "draw", "line", "step-line"], [modeMaster.isDrawyMode, "step-line"], () => layerManager.switchModeCallback()),
     new MenuButtonComponent("_|‾", "Switch",
-      [], [modeMaster.reset, "draw", "line", "switch-line", "dswlbutton"], ["dswlbutton"], () => layerManager.switchModeCallback()),
+      [], [modeMaster.reset, "draw", "line", "switch-line"], [modeMaster.isDrawyMode, "switch-line"], () => layerManager.switchModeCallback()),
     new MenuButtonComponent("◇", "Diamond",
-      [], [modeMaster.reset, "draw", "diamond", "ddibutton"], ["ddibutton"], () => layerManager.switchModeCallback()),
+      [], [modeMaster.reset, "draw", "diamond"], [modeMaster.isDrawyMode, "diamond"], () => layerManager.switchModeCallback()),
     new MenuButtonComponent("᎒᎒᎒", "Table",
-      [], [modeMaster.reset, "draw", "table", "dtblbutton"], ["dtblbutton"], () => layerManager.switchModeCallback()),
+      [], [modeMaster.reset, "draw", "table"], [modeMaster.isDrawyMode, "table"], () => layerManager.switchModeCallback()),
     new MenuButtonComponent("∿", "Free",
-      [], [modeMaster.reset, "draw", "free", "dfbutton"], ["dfbutton"], () => FreeLayer.startFreeDraw()),
+      [], [modeMaster.reset, "draw", "free"], [modeMaster.isDrawyMode, "free"], () => FreeLayer.startFreeDraw()),
     new MenuButtonComponent("⌫", "Erase",
-      [], [modeMaster.reset, "erase", "ebutton"], ["ebutton"], () => layerManager.switchModeCallback()),
+      [], [modeMaster.reset, "erase", "ebutton"], [modeMaster.hasOr, "erasing", "erase"], () => layerManager.switchModeCallback()),
     new MenuButtonComponent("↺", "Undo",
       [], [], [], (event) => layerManager.undoEvent(event)),
     new MenuButtonComponent("↻", "Redo",
@@ -4496,6 +4518,8 @@ class LeftMenuComponent extends MenuComponent {
       [modeMaster.has, "selected", "line-based"], [], [], () => layerManager.redrawLineBasedEvent("dashed")),
     new MenuButtonLeftComponent("―", "Solid",
       [modeMaster.has, "selected", "line-based"], [], [], () => layerManager.redrawLineBasedEvent("solid-thin")),
+    new MenuButtonLeftComponent("―", "Solid bold",
+      [modeMaster.has, "selected", "line-based"], [], [], () => layerManager.redrawLineBasedEvent("solid-bold")),
   ]
 
   drawFreeButtons() {
@@ -4506,7 +4530,7 @@ class LeftMenuComponent extends MenuComponent {
           icon,
           name,
           [modeMaster.has, "draw", "free"],
-          [modeMaster.reset, "draw", "free", "dfbutton", char], [char], (event) => FreeLayer.setFreeChar(char)
+          [modeMaster.reset, "draw", "free", "dfbutton", char], [modeMaster.has, char], (event) => FreeLayer.setFreeChar(char)
         )
       )
     }
