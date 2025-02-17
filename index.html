@@ -878,6 +878,10 @@ class LayerManager {
     if (data && JSON.parse(data).layers.length) this.import(data);
   }
 
+  saveToLocalStorage() {
+    localStorage.setItem("savedWorkspace", this.encodeAll());
+  }
+
   getSelectedLayers() {
     return this.layers.filter((layer) => layer.isSelected());
   }
@@ -900,6 +904,9 @@ class LayerManager {
     // Past will otherwise show as present...
     this.layers = this.copyReplaceLayers(this.layerHistory[this.historyCursor]);
     this.groupManager.jumpHistory(this.historyCursor);
+
+    // Put latest visuals to local storage (we can't rely on capture as undo should not capture).
+    this.saveToLocalStorage();
   }
 
   redo() {
@@ -908,6 +915,9 @@ class LayerManager {
     // Past will otherwise show as present...
     this.layers = this.copyReplaceLayers(this.layerHistory[this.historyCursor]);
     this.groupManager.jumpHistory(this.historyCursor);
+
+    // Put latest visuals to local storage (we can't rely on capture as redo should not capture).
+    this.saveToLocalStorage();
   }
 
   copyReplaceLayers(layers) {
@@ -1113,10 +1123,13 @@ class LayerManager {
   }
 
   capture() {
+    // This is used to record history for undo/redo state.
     this.historyCursor = 0;
     this.layerHistory.unshift(this.copyReplaceLayers(this.layers));
     this.groupManager.capture();
-    localStorage.setItem("savedWorkspace", this.encodeAll());
+
+    // We also save latest changes to local storage.
+    this.saveToLocalStorage();
   }
 
   setSelectPixel(selectedPixel) {
