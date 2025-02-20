@@ -1,0 +1,8 @@
+services:
+  ascii:
+    build:
+      context: .
+    volumes:
+      - ./src/frontend:/home/frontend
+    ports:
+      - "8000:8000"
