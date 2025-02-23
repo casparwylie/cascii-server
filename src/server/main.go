@@ -1,19 +1,18 @@
 package main
 
 import (
-    "fmt"
-    "log"
-    "net/http"
+	"log"
+	"net/http"
 )
 
 func main() {
 
+	dbFactory := DbFactory{maxConns: 5, maxIdleConns: 5}
+	dbClient := dbFactory.Get()
+	defer dbClient.Close()
 
-    http.HandleFunc("/hi", func(w http.ResponseWriter, r *http.Request){
-        fmt.Fprintf(w, "Hi")
-    })
+	http.Handle("/", Router(&Servicers{db: dbClient}))
 
-    http.Handle("/", http.FileServer(http.Dir("./frontend")))
-    log.Fatal(http.ListenAndServe(":8000", nil))
-
+	// TODO: Look into timeout configs
+	log.Fatal(http.ListenAndServe(":8000", nil))
 }

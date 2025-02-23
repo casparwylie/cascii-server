@@ -1,8 +1,28 @@
 services:
-  ascii:
+  ascii_server:
+    container_name: ascii_server
     build:
       context: .
+    environment:
+      DB_NAME: "ascii"
+      DB_HOST: "ascii_db"
+      DB_PORT: 3306
+      DB_USER: "root"
+      DB_PASS: "pass"
     volumes:
       - ./src/frontend:/home/frontend
     ports:
       - "8000:8000"
+
+  ascii_db:
+    container_name: ascii_db
+    restart: always
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: "ascii"
+      MYSQL_ROOT_PASSWORD: "pass"
+    volumes:
+     - ./.mysql-dev:/var/lib/mysql
+    command: --default-authentication-plugin=caching_sha2_password
+    ports:
+      - "3306:3306"
