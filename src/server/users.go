@@ -4,7 +4,6 @@ import (
 	"crypto/sha512"
 	"database/sql"
 	"encoding/hex"
-	"net/mail"
 )
 
 func HashPassword(password string) string {
@@ -13,31 +12,13 @@ func HashPassword(password string) string {
 	return hex.EncodeToString(hash.Sum(nil))
 }
 
-func CreateUser(db *sql.DB, email string, password string) string {
-
-	if UserExists(db, email) {
-		return "User already exists"
-	}
-
-	parsedEmail, err := mail.ParseAddress(email)
-	if err != nil || parsedEmail.Address != email {
-		return "Invalid email"
-	}
-
-	if len(password) < 5 {
-		return "Password too short"
-	}
-
-	_, err = db.Exec(
+func CreateUser(db *sql.DB, email string, password string) bool {
+	_, err := db.Exec(
 		"INSERT INTO users (email, password) VALUES (?, ?)",
 		email,
 		HashPassword(password),
 	)
-	if err != nil {
-		return "Unknown error"
-	}
-
-	return ""
+	return err == nil
 }
 
 func GetUserById(db *sql.DB, id string) string {

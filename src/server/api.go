@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"net/mail"
 
 	"github.com/gorilla/mux"
 )
@@ -20,7 +21,7 @@ type UserResponse struct {
 	email string
 }
 
-type User struct {
+type CreateUserRequest struct {
 	Email    string
 	Password string
 }
@@ -30,19 +31,33 @@ type UserHandler struct {
 }
 
 func (handler UserHandler) create(w http.ResponseWriter, r *http.Request) {
-	var user User
-	err := json.NewDecoder(r.Body).Decode(&user)
+	var request CreateUserRequest
+	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	errorMessage := CreateUser(handler.servicers.db, user.Email, user.Password)
-	if errorMessage == "" {
-		w.WriteHeader(http.StatusCreated)
-	} else {
-		w.WriteHeader(http.StatusBadRequest)
+	if len(request.Password) < 5 {
+		json.NewEncoder(w).Encode(GenericResponse{Error: "Password too short"})
+		return
 	}
-	json.NewEncoder(w).Encode(GenericResponse{Error: errorMessage})
+	parsedEmail, err := mail.ParseAddress(request.Email)
+	if err != nil || parsedEmail.Address != request.Email {
+		json.NewEncoder(w).Encode(GenericResponse{Error: "Invalid email"})
+		return
+	}
+	if UserExists(handler.servicers.db, request.Email) {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(GenericResponse{Error: "User already exists"})
+		return
+	}
+	if success := CreateUser(handler.servicers.db, request.Email, request.Password); success != true {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(GenericResponse{Error: "Unknown error"})
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(GenericResponse{Error: ""})
 }
 
 func (handler UserHandler) get(w http.ResponseWriter, r *http.Request) {

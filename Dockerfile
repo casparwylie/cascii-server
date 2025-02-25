@@ -2,7 +2,7 @@ FROM golang:1.24 AS server
 
 WORKDIR /home
 
-COPY src/server/go.mod src/server/go.sum ./
+COPY src/go.mod src/go.sum ./
 RUN go mod download
 
 RUN ls -la
@@ -11,7 +11,6 @@ COPY src/server ./
 COPY src/frontend ./frontend
 
 RUN go build -v .
-RUN rm *.go
 
 CMD ["./ascii"]
 
