@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -13,13 +12,12 @@ type Servicers struct {
 	db *sql.DB
 }
 
-type Handler struct {
-	handlerFunc func(s *Servicers, w http.ResponseWriter, r *http.Request)
-	servicers   *Servicers
+type GenericResponse struct {
+	Error string `json:"error"`
 }
 
-func (handler Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	handler.handlerFunc(handler.servicers, w, r)
+type UserResponse struct {
+	email string
 }
 
 type User struct {
@@ -27,29 +25,52 @@ type User struct {
 	Password string
 }
 
-func UserCreateHandler(s *Servicers, w http.ResponseWriter, r *http.Request) {
+type UserHandler struct {
+	servicers *Servicers
+}
+
+func (handler UserHandler) create(w http.ResponseWriter, r *http.Request) {
 	var user User
 	err := json.NewDecoder(r.Body).Decode(&user)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
-	// TODO: Look into exec closing requirements
-	s.db.Exec("INSERT INTO users (email, password) VALUES (?, ?)", user.Email, user.Password)
-	fmt.Println(user)
+	errorMessage := CreateUser(handler.servicers.db, user.Email, user.Password)
+	if errorMessage == "" {
+		w.WriteHeader(http.StatusCreated)
+	} else {
+		w.WriteHeader(http.StatusBadRequest)
+	}
+	json.NewEncoder(w).Encode(GenericResponse{Error: errorMessage})
 }
 
-func UserGetHandler(s *Servicers, w http.ResponseWriter, _ *http.Request) {
-	fmt.Fprintf(w, "UserGetHandler!")
+func (handler UserHandler) get(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	email := GetUserById(handler.servicers.db, vars["id"])
+	if email == "" {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(UserResponse{email: email})
 }
 
+func (handler UserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	switch r.Method {
+	case "POST":
+		handler.create(w, r)
+	case "GET":
+		handler.get(w, r)
+	}
+}
 func Router(servicers *Servicers) *mux.Router {
 	router := mux.NewRouter()
 
 	userRouter := router.PathPrefix("/api/user").Subrouter()
-	userRouter.Handle("/", Handler{UserCreateHandler, servicers}).Methods("POST")
-	userRouter.Handle("/", Handler{UserGetHandler, servicers}).Methods("GET")
+	userRouter.Handle("/", UserHandler{servicers}).Methods("POST")
+	userRouter.Handle("/{id}", UserHandler{servicers}).Methods("GET")
 
 	staticRouter := router.PathPrefix("/").Subrouter()
 	staticRouter.Handle("/", http.FileServer(http.Dir("./frontend")))

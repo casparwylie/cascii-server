@@ -3,6 +3,7 @@ services:
     container_name: ascii_server
     build:
       context: .
+      target: base
     environment:
       DB_NAME: "ascii"
       DB_HOST: "ascii_db"
@@ -13,6 +14,9 @@ services:
       - ./src/frontend:/home/frontend
     ports:
       - "8000:8000"
+    depends_on:
+      ascii_db:
+        condition: service_healthy
 
   ascii_db:
     container_name: ascii_db
@@ -26,3 +30,22 @@ services:
     command: --default-authentication-plugin=caching_sha2_password
     ports:
       - "3306:3306"
+    healthcheck:
+        test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+        timeout: 5s
+        retries: 10
+
+  tests:
+    container_name: tests
+    build:
+      context: .
+      target: tests
+    environment:
+      DB_NAME: "ascii_tests"
+      DB_HOST: "ascii_db"
+      DB_PORT: 3306
+      DB_USER: "root"
+      DB_PASS: "pass"
+    depends_on:
+      ascii_db:
+        condition: service_healthy

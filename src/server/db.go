@@ -20,9 +20,7 @@ func (dbFactory *DbFactory) Get() *sql.DB {
 	if dbFactory.db != nil {
 		return dbFactory.db
 	}
-	connString := dbFactory.GetConnectionString()
-	fmt.Println(connString)
-	db, err := sql.Open("mysql", connString)
+	db, err := sql.Open("mysql", dbFactory.GetConnectionString())
 	dbFactory.db = db
 	if err != nil {
 		// TODO: consider better err handling
