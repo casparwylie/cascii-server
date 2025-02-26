@@ -424,7 +424,9 @@ class EventManager {
         ],
         paste: [
           new EventDef([modeMaster.has, "writing", "text"],
-          [], (event) => layerManager.pasteToTextLayerEvent(event))
+          [], (event) => layerManager.pasteToTextLayerEvent(event)),
+          new EventDef([],
+          [], (event) => layerManager.pasteAsTextLayerEvent(event))
         ],
         mouseup: [
           new EventDef([modeMaster.has, "drawing"],
@@ -1503,8 +1505,27 @@ class LayerManager {
     this.refresh(
       () => this.editingTextLayer.commit(
         () => this.editingTextLayer.paste(text)
+        // TODO: Show error when failing to copy
       )
     );
+  }
+
+  pasteAsTextLayerEvent(event) {
+    event.stopPropagation();
+    event.preventDefault();
+    // TODO: Consider unifying clipboard reading with method above
+    modeMaster.reset("select");
+    let clipboardData = event.clipboardData || window.clipboardData;
+    let text = clipboardData.getData('Text').substring(0, 1000);
+    let textLayer = new TextLayer(canvas.getPixelByRowCol(30, 30).id());
+    textLayer.contents = text.split("");
+    layerManager.add(textLayer);
+    this.refresh(() => {
+      if (textLayer.commit(() => textLayer.drawLayer())) {
+        textLayer.select();
+      } // TODO: Show error when failing to copy
+    });
+
   }
 }
 
