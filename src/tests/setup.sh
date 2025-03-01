@@ -16,4 +16,4 @@ sleep 3
 
 echo "Running tests..."
 
-go test
+go test "$@"

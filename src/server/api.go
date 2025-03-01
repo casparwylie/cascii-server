@@ -26,47 +26,40 @@ type CreateUserRequest struct {
 	Password string
 }
 
-type CreateSessionRequest struct {
+type AuthUserRequest struct {
 	Email    string
 	Password string
 }
 
-type CrudHandler interface {
-	Get(db *sql.DB, w http.ResponseWriter, r *http.Request)
-	Create(db *sql.DB, w http.ResponseWriter, r *http.Request)
+type AuthHandler struct {
+	Servicers   *Servicers
+	HandlerFunc func(db *sql.DB, userId int, w http.ResponseWriter, r *http.Request)
 }
 
 type Handler struct {
 	Servicers   *Servicers
-	CrudHandler CrudHandler
+	HandlerFunc func(db *sql.DB, w http.ResponseWriter, r *http.Request)
 }
 
-func RequireUser(db *sql.DB, w http.ResponseWriter, r *http.Request) int {
+func (handler AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	sessionCookie, err := r.Cookie("sessionKey")
 	if err == nil {
-		if userId := GetSessionUserId(db, sessionCookie.Value); userId != -1 {
-			return userId
+		if userId := GetSessionUserId(handler.Servicers.db, sessionCookie.Value); userId != -1 {
+			handler.HandlerFunc(handler.Servicers.db, userId, w, r)
+			return
 		}
 	}
 	w.WriteHeader(http.StatusUnauthorized)
 	json.NewEncoder(w).Encode(GenericResponse{Error: "Unauthorized"})
-	return -1
 }
 
 func (handler Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	switch r.Method {
-	case "POST":
-		handler.CrudHandler.Create(handler.Servicers.db, w, r)
-	case "GET":
-		handler.CrudHandler.Get(handler.Servicers.db, w, r)
-	}
+	handler.HandlerFunc(handler.Servicers.db, w, r)
 }
 
-type UserHandler struct{}
-type SessionHandler struct{}
-
-func (handler UserHandler) Create(db *sql.DB, w http.ResponseWriter, r *http.Request) {
+func CreateUserHandler(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	var request CreateUserRequest
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
@@ -96,12 +89,7 @@ func (handler UserHandler) Create(db *sql.DB, w http.ResponseWriter, r *http.Req
 	json.NewEncoder(w).Encode(GenericResponse{Error: ""})
 }
 
-func (handler UserHandler) Get(db *sql.DB, w http.ResponseWriter, r *http.Request) {
-
-	userId := RequireUser(db, w, r)
-	if userId == -1 {
-		return
-	}
+func GetUserHandler(db *sql.DB, userId int, w http.ResponseWriter, r *http.Request) {
 	if email := GetUserById(db, userId); email != "" {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(UserResponse{Email: email})
@@ -111,47 +99,35 @@ func (handler UserHandler) Get(db *sql.DB, w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(GenericResponse{Error: "User not found"})
 }
 
-func (handler SessionHandler) Create(db *sql.DB, w http.ResponseWriter, r *http.Request) {
-	var request CreateSessionRequest
+func AuthUserHandler(db *sql.DB, w http.ResponseWriter, r *http.Request) {
+	var request AuthUserRequest
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	if userId := Authenticate(db, request.Email, request.Password); userId != -1 {
-		sessionKey := CreateSession(db, userId)
 		cookie := &http.Cookie{
 			Name:     "sessionKey",
-			Value:    sessionKey,
+			Value:    CreateSession(db, userId),
 			HttpOnly: true,
-			Secure:   true,
 		}
 		http.SetCookie(w, cookie)
-		w.WriteHeader(http.StatusCreated)
+		w.WriteHeader(http.StatusAccepted)
 		json.NewEncoder(w).Encode(GenericResponse{Error: ""})
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(GenericResponse{Error: "Login failed"})
-}
-
-func (handler SessionHandler) Get(db *sql.DB, w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(GenericResponse{Error: ""})
+	json.NewEncoder(w).Encode(GenericResponse{Error: "User not found"})
 }
 
 func Router(servicers *Servicers) *mux.Router {
 	router := mux.NewRouter()
 
-	var userHandler = Handler{servicers, UserHandler{}}
-	var sessionHandler = Handler{servicers, SessionHandler{}}
-
 	userRouter := router.PathPrefix("/api/user").Subrouter()
-	userRouter.Handle("/", userHandler)
-	userRouter.Handle("/{id}", userHandler)
-
-	sessionRouter := router.PathPrefix("/api/session").Subrouter()
-	sessionRouter.Handle("/", sessionHandler)
+	userRouter.Handle("/", Handler{servicers, CreateUserHandler}).Methods("POST")
+	userRouter.Handle("/", AuthHandler{servicers, GetUserHandler}).Methods("GET")
+	userRouter.Handle("/auth", Handler{servicers, AuthUserHandler}).Methods("POST")
 
 	staticRouter := router.PathPrefix("/").Subrouter()
 	staticRouter.Handle("/", http.FileServer(http.Dir("./frontend")))

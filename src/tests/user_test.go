@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/http/cookiejar"
 	"os"
 	"testing"
 
@@ -13,7 +15,6 @@ import (
 )
 
 var USER_API string = "http://localhost:8000/api/user/"
-var SESSION_API string = "http://localhost:8000/api/session/"
 
 var db, err = sql.Open("mysql", fmt.Sprintf(
 	"%s:%s@tcp(%s:%s)/%s",
@@ -25,13 +26,39 @@ var db, err = sql.Open("mysql", fmt.Sprintf(
 ))
 
 func clearDb() {
-	db.Exec("TRUNCATE users; TRUNCATE sessions;")
+	db.Exec("DELETE FROM sessions")
+	db.Exec("DELETE FROM users")
 }
 
-func Post(url string, request any, t any) int {
+func MakeCookieClient() *http.Client {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		panic(err)
+	}
+	return &http.Client{Jar: jar}
+}
+
+func GetCookie(resp *http.Response, name string) (*http.Cookie, error) {
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name == name {
+			return cookie, nil
+		}
+	}
+	return nil, errors.New("No cookie found")
+}
+
+func Post(url string, request any, t any) *http.Response {
+	return PostWithClient(&http.Client{}, url, request, t)
+}
+
+func Get(url string, t any) *http.Response {
+	return GetWithClient(&http.Client{}, url, t)
+}
+
+func PostWithClient(client *http.Client, url string, request any, t any) *http.Response {
 	var r bytes.Buffer
 	json.NewEncoder(&r).Encode(request)
-	resp, err := http.Post(url, "application/json", &r)
+	resp, err := client.Post(url, "application/json", &r)
 	defer resp.Body.Close()
 	if err != nil {
 		panic(err)
@@ -40,11 +67,11 @@ func Post(url string, request any, t any) int {
 	if err != nil {
 		panic(err)
 	}
-	return resp.StatusCode
+	return resp
 }
 
-func Get(url string, t any) int {
-	resp, err := http.Get(url)
+func GetWithClient(client *http.Client, url string, t any) *http.Response {
+	resp, err := client.Get(url)
 	defer resp.Body.Close()
 	if err != nil {
 		panic(err)
@@ -53,121 +80,131 @@ func Get(url string, t any) int {
 	if err != nil {
 		panic(err)
 	}
-	return resp.StatusCode
+	return resp
 }
 
 func TestCreateUser_shortPassword(t *testing.T) {
 	clearDb()
 	var respBody GenericResponse
-	status := Post(
+	resp := Post(
 		USER_API,
 		CreateUserRequest{Email: "test@test.com", Password: "123"},
 		&respBody,
 	)
-	assert.Equal(t, http.StatusOK, status)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "Password too short", respBody.Error)
 }
 
 func TestCreateUser_invalidEmail(t *testing.T) {
 	clearDb()
 	var respBody GenericResponse
-	status := Post(
+	resp := Post(
 		USER_API,
 		CreateUserRequest{Email: "testtest.com", Password: "12345"},
 		&respBody,
 	)
-	assert.Equal(t, http.StatusOK, status)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "Invalid email", respBody.Error)
 }
 
 func TestCreateUser_userExists(t *testing.T) {
 	clearDb()
-	var respBody GenericResponse
 	// Create user
-	status := Post(
+	Post(
 		USER_API,
 		CreateUserRequest{Email: "test@test.com", Password: "12345"},
-		&respBody,
+		&GenericResponse{},
 	)
 	// Creater same user again
-	status = Post(
+	var respBody GenericResponse
+	resp := Post(
 		USER_API,
 		CreateUserRequest{Email: "test@test.com", Password: "123456"},
 		&respBody,
 	)
-	assert.Equal(t, http.StatusOK, status)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "User already exists", respBody.Error)
 }
 
-func TestCreateUser_createsSuccessfully(t *testing.T) {
+func TestCreateUser_success(t *testing.T) {
 	clearDb()
 	var respBody GenericResponse
-	status := Post(
+	resp := Post(
 		USER_API,
 		CreateUserRequest{Email: "test@test.com", Password: "12345"},
 		&respBody,
 	)
-	assert.Equal(t, http.StatusCreated, status)
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.Equal(t, "", respBody.Error)
 }
 
-func TestCreateSession_badAuth(t *testing.T) {
+func TestAuthUser_badCredentials(t *testing.T) {
 	clearDb()
-	var respBody GenericResponse
-	status := Post(
+	Post(
 		USER_API,
 		CreateUserRequest{Email: "test@test.com", Password: "12345"},
+		&GenericResponse{},
+	)
+	var respBody GenericResponse
+	resp := Post(
+		USER_API+"auth",
+		AuthUserRequest{Email: "test@test.com", Password: "123456"},
 		&respBody,
 	)
-	status := Post(
-		SESSION_API,
-		CreateSessionRequest{Email: "test@test.com", Password: "123456"},
-		&respBody,
-	)
-	assert.Equal(t, http.StatusOK, status)
-	assert.Equal(t, "Login failed", respBody.Error)
+	cookie, err := GetCookie(resp, "sessionKey")
+	assert.Error(t, err)
+	assert.Nil(t, cookie)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "User not found", respBody.Error)
 }
 
-func TestCreateSession_createsSuccessfully(t *testing.T) {
+func TestAuthUser_success(t *testing.T) {
 	clearDb()
-	var respBody GenericResponse
-	status := Post(
+	Post(
 		USER_API,
 		CreateUserRequest{Email: "test@test.com", Password: "12345"},
-		GenericResponse{},
+		&GenericResponse{},
 	)
-	status := Post(
-		SESSION_API,
-		CreateSessionRequest{Email: "test@test.com", Password: "12345"},
+	var respBody GenericResponse
+	resp := Post(
+		USER_API+"auth",
+		AuthUserRequest{Email: "test@test.com", Password: "12345"},
 		&respBody,
 	)
-	// TODO assert cookie creation
-	assert.Equal(t, http.StatusCreated, status)
+	cookie, err := GetCookie(resp, "sessionKey")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, cookie)
+	assert.Equal(t, http.StatusAccepted, resp.StatusCode)
 	assert.Equal(t, "", respBody.Error)
+}
+
+func TestGetUser_success(t *testing.T) {
+	clearDb()
+	client := MakeCookieClient()
+	PostWithClient(
+		client,
+		USER_API,
+		CreateUserRequest{Email: "test@test.com", Password: "12345"},
+		&GenericResponse{},
+	)
+	PostWithClient(
+		client,
+		USER_API+"auth",
+		AuthUserRequest{Email: "test@test.com", Password: "12345"},
+		&GenericResponse{},
+	)
+
+	var respBody UserResponse
+	resp := GetWithClient(client, USER_API, &respBody)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "test@test.com", respBody.Email)
 }
 
 func TestGetUser_Unauthorized(t *testing.T) {
 	clearDb()
 	var respBody GenericResponse
-	status := Get(USER_API+"999", &respBody)
-	assert.Equal(t, http.StatusUnauthorized, status)
+	resp := Get(USER_API, &respBody)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	assert.Equal(t, "Unauthorized", respBody.Error)
-}
-
-func TestGetUser_getsSuccessfully(t *testing.T) {
-	clearDb()
-	status := Post(
-		USER_API,
-		CreateUserRequest{Email: "test@test.com", Password: "12345"},
-		GenericResponse{},
-	)
-	status := Post(
-		SESSION_API,
-		CreateSessionRequest{Email: "test@test.com", Password: "12345"},
-		GenericResponse{},
-	)
-	// TODO send cookie
-	status := Get(USER_API, &respBody)
-	assert.Equal(t, http.StatusCreated, status)
-	assert.Equal(t, "", respBody.Error)
 }

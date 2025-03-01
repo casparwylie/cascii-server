@@ -16,27 +16,19 @@ func CreateUser(db *sql.DB, email string, password string) bool {
 func GetUserById(db *sql.DB, id int) string {
 	var email string
 	err := db.QueryRow("SELECT email FROM users WHERE id = ?", id).Scan(&email)
-	switch err {
-	case sql.ErrNoRows:
-		return ""
-	case nil:
+	if err == nil || err == sql.ErrNoRows {
 		return email
-	default:
-		panic(err)
 	}
+	panic(err)
 }
 
 func UserExists(db *sql.DB, email string) bool {
 	var exists bool
 	err := db.QueryRow("SELECT 1 FROM users WHERE email = ?", email).Scan(&exists)
-	switch err {
-	case sql.ErrNoRows:
-		return false
-	case nil:
+	if err == nil || err == sql.ErrNoRows {
 		return exists
-	default:
-		panic(err)
 	}
+	panic(err)
 }
 
 func Authenticate(db *sql.DB, email string, password string) int {
@@ -46,8 +38,34 @@ func Authenticate(db *sql.DB, email string, password string) int {
 		email,
 		HashPassword(password),
 	).Scan(&userId)
+	if err == nil || err == sql.ErrNoRows {
+		return userId
+	}
+	panic(err)
+}
+
+func MakeSessionKey() string {
+	return GenerateUUID()
+}
+
+func CreateSession(db *sql.DB, userId int) string {
+	key := MakeSessionKey()
+	_, err := db.Exec(
+		"INSERT INTO sessions (session_key, user_id) VALUES (?, ?)",
+		key,
+		userId,
+	)
 	if err != nil {
 		panic(err)
 	}
-	return userId
+	return key
+}
+
+func GetSessionUserId(db *sql.DB, key string) int {
+	userId := -1
+	err := db.QueryRow("SELECT user_id FROM sessions WHERE session_key = ?", key).Scan(&userId)
+	if err == nil || err == sql.ErrNoRows {
+		return userId
+	}
+	panic(err)
 }
