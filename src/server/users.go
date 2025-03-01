@@ -1,16 +1,8 @@
 package main
 
 import (
-	"crypto/sha512"
 	"database/sql"
-	"encoding/hex"
 )
-
-func HashPassword(password string) string {
-	hash := sha512.New()
-	hash.Write([]byte(password))
-	return hex.EncodeToString(hash.Sum(nil))
-}
 
 func CreateUser(db *sql.DB, email string, password string) bool {
 	_, err := db.Exec(
@@ -21,7 +13,7 @@ func CreateUser(db *sql.DB, email string, password string) bool {
 	return err == nil
 }
 
-func GetUserById(db *sql.DB, id string) string {
+func GetUserById(db *sql.DB, id int) string {
 	var email string
 	err := db.QueryRow("SELECT email FROM users WHERE id = ?", id).Scan(&email)
 	switch err {
@@ -45,4 +37,17 @@ func UserExists(db *sql.DB, email string) bool {
 	default:
 		panic(err)
 	}
+}
+
+func Authenticate(db *sql.DB, email string, password string) int {
+	userId := -1
+	err := db.QueryRow(
+		"SELECT id FROM users WHERE email = ? AND password = ?",
+		email,
+		HashPassword(password),
+	).Scan(&userId)
+	if err != nil {
+		panic(err)
+	}
+	return userId
 }

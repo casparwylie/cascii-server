@@ -1,6 +1,6 @@
 CREATE TABLE users (
-    id mediumint not null auto_increment,
-    email varchar(255),
-    password varchar(500),
-    primary key (id)
+    id MEDIUMINT NOT NULL AUTO_INCREMENT,
+    email VARCHAR(255),
+    password VARCHAR(500),
+    PRIMARY KEY (id)
 );
