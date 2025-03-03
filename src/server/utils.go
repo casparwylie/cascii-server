@@ -7,9 +7,9 @@ import (
 	"github.com/google/uuid"
 )
 
-func HashPassword(password string) string {
+func Hash(str string) string {
 	hash := sha512.New()
-	hash.Write([]byte(password))
+	hash.Write([]byte(str))
 	return hex.EncodeToString(hash.Sum(nil))
 }
 
