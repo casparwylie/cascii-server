@@ -3,7 +3,7 @@ services:
     container_name: ascii_server
     build:
       context: .
-      target: base
+      target: server
     environment:
       DB_NAME: "ascii"
       DB_HOST: "ascii_db"

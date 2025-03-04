@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/mux"
 )
 
@@ -26,8 +27,8 @@ type UserResponse struct {
 }
 
 type CreateUserRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email    string `json:"email" validate:"required"`
+	Password string `json:"password" validate:"required"`
 }
 
 type AuthUserRequest struct {
@@ -36,7 +37,7 @@ type AuthUserRequest struct {
 }
 
 type CreateImmutableDrawingRequest struct {
-	Data string `json:"data"`
+	Data string `json:"data" validate:"required,json"`
 }
 
 type CreateImmutableDrawingResponse struct {
@@ -49,8 +50,8 @@ type GetImmutableDrawingResponse struct {
 }
 
 type CreateMutableDrawingRequest struct {
-	Data string `json:"data"`
-	Name string `json:"name"`
+	Data string `json:"data" validate:"required,json"`
+	Name string `json:"name" validate:"required"`
 }
 
 type CreateMutableDrawingResponse struct {
@@ -58,9 +59,8 @@ type CreateMutableDrawingResponse struct {
 }
 
 type UpdateMutableDrawingRequest struct {
-	Id   int    `json:"id"`
-	Data string `json:"data"`
-	Name string `json:"name"`
+	Data string `json:"data" validate:"required,json"`
+	Name string `json:"name" validate:"required"`
 }
 
 type GetMutableDrawingResponse struct {
@@ -69,6 +69,16 @@ type GetMutableDrawingResponse struct {
 	Data      string `json:"data"`
 	Name      string `json:"name"`
 	CreatedAt string `json:"created_at"`
+}
+
+type MutableDrawingRowResponse struct {
+	Id        int    `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"created_at"`
+}
+
+type ListMutableDrawingsResponse struct {
+	Results []MutableDrawingRowResponse `json:"results"`
 }
 
 type AuthHandler struct {
@@ -82,7 +92,7 @@ type Handler struct {
 }
 
 func WriteUnknownError(w http.ResponseWriter, err error) {
-	log.Fatal(err)
+	log.Print(err)
 	WriteGenericResponse(w, http.StatusInternalServerError, "Unknown error")
 }
 
@@ -98,10 +108,15 @@ func WriteStructuredResponse(w http.ResponseWriter, status int, data any) {
 
 func DecodeRequest(request any, w http.ResponseWriter, r *http.Request) bool {
 	err := json.NewDecoder(r.Body).Decode(&request)
-	if err != nil {
-		WriteGenericResponse(w, http.StatusBadRequest, "Bad request")
+	if err == nil {
+		validate := validator.New()
+		err = validate.Struct(request)
+		if err == nil {
+			return true
+		}
 	}
-	return err == nil
+	WriteGenericResponse(w, http.StatusBadRequest, "Bad request")
+	return false
 }
 
 func (handler AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -109,6 +124,7 @@ func (handler AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	sessionCookie, err := r.Cookie("sessionKey")
 	if err != nil {
 		WriteGenericResponse(w, http.StatusUnauthorized, "Unauthorized")
+		return
 	}
 	userId, err := GetSessionUserId(handler.Servicers.db, sessionCookie.Value)
 	if err != nil {
@@ -247,6 +263,12 @@ func CreateMutableDrawingHandler(db *sql.DB, userId int, w http.ResponseWriter, 
 	if !DecodeRequest(&request, w, r) {
 		return
 	}
+
+	if len(request.Name) > 100 {
+		WriteGenericResponse(w, http.StatusOK, "Name too long")
+		return
+	}
+
 	id, err := CreateMutableDrawing(db, request.Data, request.Name, userId)
 	if err != nil {
 		WriteUnknownError(w, err)
@@ -261,7 +283,7 @@ func GetMutableDrawingHandler(db *sql.DB, userId int, w http.ResponseWriter, r *
 		WriteGenericResponse(w, http.StatusBadRequest, "Bad request")
 		return
 	}
-	userId, name, data, createdAt, err := GetMutableDrawing(db, id)
+	name, data, createdAt, err := GetMutableDrawing(db, id, userId)
 	if err != nil {
 		WriteUnknownError(w, err)
 		return
@@ -276,18 +298,65 @@ func GetMutableDrawingHandler(db *sql.DB, userId int, w http.ResponseWriter, r *
 }
 
 func UpdateMutableDrawingHandler(db *sql.DB, userId int, w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		WriteGenericResponse(w, http.StatusBadRequest, "Bad request")
+		return
+	}
 	var request UpdateMutableDrawingRequest
 	if !DecodeRequest(&request, w, r) {
 		return
 	}
-	if err := UpdateMutableDrawing(db, request.Id, request.Data, request.Name, userId); err != nil {
+	if len(request.Name) > 100 {
+		WriteGenericResponse(w, http.StatusOK, "Name too long")
+		return
+	}
+	updated, err := UpdateMutableDrawing(db, id, request.Data, request.Name, userId)
+	if err != nil {
 		WriteUnknownError(w, err)
+		return
+	}
+	if !updated {
+		WriteGenericResponse(w, http.StatusNotFound, "Drawing not found")
 		return
 	}
 	WriteGenericResponse(w, http.StatusOK, "")
 }
 
 func DeleteMutableDrawingHandler(db *sql.DB, userId int, w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		WriteGenericResponse(w, http.StatusBadRequest, "Bad request")
+		return
+	}
+	deleted, err := DeleteMutableDrawing(db, id, userId)
+	if err != nil {
+		WriteUnknownError(w, err)
+		return
+	}
+	if !deleted {
+		WriteGenericResponse(w, http.StatusNotFound, "Drawing not found")
+		return
+	}
+	WriteGenericResponse(w, http.StatusOK, "")
+}
+
+func ListMutableDrawingsHandler(db *sql.DB, userId int, w http.ResponseWriter, r *http.Request) {
+	results, err := ListMutableDrawings(db, userId)
+	if err != nil {
+		WriteUnknownError(w, err)
+		return
+	}
+	var resultsResponse []MutableDrawingRowResponse
+	for _, item := range results {
+		resultsResponse = append(
+			resultsResponse,
+			MutableDrawingRowResponse{Id: item.Id, Name: item.Name, CreatedAt: item.CreatedAt},
+		)
+	}
+	WriteStructuredResponse(
+		w, http.StatusOK, ListMutableDrawingsResponse{Results: resultsResponse},
+	)
 }
 
 func Router(servicers *Servicers) *mux.Router {
@@ -303,9 +372,10 @@ func Router(servicers *Servicers) *mux.Router {
 	drawingsRouter.Handle("/immutable", Handler{servicers, CreateImmutableDrawingHandler}).Methods("POST")
 	drawingsRouter.Handle("/immutable/{short_key}", Handler{servicers, GetImmutableDrawingHandler}).Methods("GET")
 	drawingsRouter.Handle("/mutable", AuthHandler{servicers, CreateMutableDrawingHandler}).Methods("POST")
-	drawingsRouter.Handle("/mutable", AuthHandler{servicers, UpdateMutableDrawingHandler}).Methods("PATCH")
-	drawingsRouter.Handle("/mutable", AuthHandler{servicers, GetMutableDrawingHandler}).Methods("DELETE")
-	drawingsRouter.Handle("/mutable/{id}", AuthHandler{servicers, DeleteMutableDrawingHandler}).Methods("GET")
+	drawingsRouter.Handle("/mutable/{id}", AuthHandler{servicers, UpdateMutableDrawingHandler}).Methods("PUT")
+	drawingsRouter.Handle("/mutable/{id}", AuthHandler{servicers, GetMutableDrawingHandler}).Methods("GET")
+	drawingsRouter.Handle("/mutable/{id}", AuthHandler{servicers, DeleteMutableDrawingHandler}).Methods("DELETE")
+	drawingsRouter.Handle("/mutables", AuthHandler{servicers, ListMutableDrawingsHandler}).Methods("GET")
 
 	staticRouter := router.PathPrefix("/").Subrouter()
 	staticRouter.Handle("/", http.FileServer(http.Dir("./frontend")))

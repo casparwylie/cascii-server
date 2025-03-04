@@ -33,6 +33,17 @@ func TestCreateUser_invalidEmail(t *testing.T) {
 	assert.Equal(t, "Invalid email", respBody.Error)
 }
 
+func TestCreateUser_badRequest(t *testing.T) {
+	clearDb()
+	var respBody GenericResponse
+	resp := Post(
+		USER_API,
+		CreateUserRequest{Password: "12345"},
+		&respBody,
+	)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
 func TestCreateUser_userExists(t *testing.T) {
 	clearDb()
 	// Create user

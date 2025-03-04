@@ -16,4 +16,4 @@ sleep 3
 
 echo "Running tests..."
 
-go test -run "TestCreateMutableDrawing_success" 
+go test 
