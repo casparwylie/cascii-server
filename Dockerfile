@@ -5,8 +5,6 @@ WORKDIR /home
 COPY src/go.mod src/go.sum ./
 RUN go mod download
 
-RUN ls -la
-
 COPY src/server ./
 COPY src/frontend ./frontend
 

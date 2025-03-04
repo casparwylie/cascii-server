@@ -377,8 +377,6 @@ func Router(servicers *Servicers) *mux.Router {
 	drawingsRouter.Handle("/mutable/{id}", AuthHandler{servicers, DeleteMutableDrawingHandler}).Methods("DELETE")
 	drawingsRouter.Handle("/mutables", AuthHandler{servicers, ListMutableDrawingsHandler}).Methods("GET")
 
-	staticRouter := router.PathPrefix("/").Subrouter()
-	staticRouter.Handle("/", http.FileServer(http.Dir("./frontend")))
-
+	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./frontend")))
 	return router
 }

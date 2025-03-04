@@ -1,26 +1,5 @@
 <script>
 /*
-
-*** TODO ***
-
-FE  -
-  - various todos
-  - intro / why ascii
-  - manual page. shortcuts, etc.
-  - BIG TEST
-  - merge main
-  - consider intergration testing
-
-BE -
-  - save, share, manage, user, login google + github,  CRUD
-  - guest auto save (refresh keeps)
-  - import / shorturl
-  - plain text request / curl
-
-BIG IDEAS:
-   - ML for auto parsing imported diagrams
-   - Testing - full web driver / record intergration testing
-
 IMPROVEMENTS (arguably features):
   - diamond resize bit odd with other layers.
   - joiner layer with arrow heads won't always show - zindex.
@@ -294,6 +273,10 @@ class ModeMaster {
     return modes.map((mode) => this._modes.includes(mode)).every(Boolean);
   }
 
+  hasAny() {
+    return this._modes.length > 0;
+  }
+
   hasOr(...modes) {
     return modes.map((mode) => this._modes.includes(mode)).some(Boolean);
   }
@@ -365,7 +348,7 @@ class EventManager {
                 [], (event) => layerManager.selectedArrowKeyDownEvent(event.key)),
           ],
           [["Shift"]]: [
-            new EventDef([],
+            new EventDef([modeMaster.hasAny],
                 [modeMaster.add, "shift"])
           ],
           [keyGroup("Backspace", "Delete")]: [
@@ -381,7 +364,7 @@ class EventManager {
                 [], TextLayer.keyDownEvent),
           ],
           [keyGroup("Control")]: [
-            new EventDef([],
+            new EventDef([modeMaster.hasAny],
                 [modeMaster.add, "ctrl"]),
           ],
           [keyGroup("Z", "z")]: [
@@ -3744,6 +3727,7 @@ class TableLayer extends SquareBoundLayer {
 class Component {
   _MagicMethodEventPrefix = "on";
   _MagicPropCssPrefix = "css";
+  _MagicPropCustomPrefix = "prop";
 
   value = "";
   type = "";
@@ -3777,6 +3761,8 @@ class Component {
     for (let prop of props.filter(prop => prop.includes("_"))) {
       let [type, value] = prop.split("_");
       switch(type) {
+        case this._MagicPropCustomPrefix:
+          this.element.setAttribute(value, this[prop]);
         case this._MagicPropCssPrefix:
           this.css(value, this[prop]);
         case this._MagicMethodEventPrefix:
@@ -3813,7 +3799,7 @@ class Component {
   render(parent) {
     this.create();
     this.setId();
-    this.setValue(this.value);
+    this.setValue(this.value); // TODO: this.value should be called initialValue or use prop_value
     this.registerMagicProps();
     this.renderChildren();
     this.assignParent(parent);
@@ -3821,9 +3807,12 @@ class Component {
     this.renderCallback();
   }
 
-  addChild(child) {
+  addChild(child, prop="") {
     this.children.push(child);
     child.render(this);
+    if (prop != "") {
+      this[prop] = child;
+    }
 
   }
 
@@ -3839,11 +3828,12 @@ class Component {
 
   setValue(value) {
     this.value = value;
+    this.element.value = value;
     this.element.innerHTML = value;
   }
 
   getValue() {
-    return this.value;
+    return this.element.value;
   }
 
   show() {
@@ -4164,6 +4154,14 @@ class PopupComponent extends Component {
     bodyComponent.hidePopups();
     super.toggle();
   }
+
+  renderCallback() {
+    this.hide();
+  }
+
+  defineTheme() {
+    this.css("background", "bodyBgColor");
+  }
 }
 
 
@@ -4213,18 +4211,9 @@ By using text, you avoid the need for file formats, attaching documents and over
 </span>
   `;
 
-  defineTheme() {
-    this.css("background", "bodyBgColor");
-  }
-
   defineChildren() {
     return [];
   }
-
-  renderCallback() {
-    this.hide();
-  }
-
 }
 
 class SettingsComponent extends PopupComponent {
@@ -4288,10 +4277,6 @@ class SettingsComponent extends PopupComponent {
     }
   }
 
-  defineTheme() {
-    this.css("background", "bodyBgColor");
-  }
-
   defineChildren() {
     return [
       new Component({
@@ -4321,11 +4306,6 @@ class SettingsComponent extends PopupComponent {
       }),
     ]
   }
-
-  renderCallback() {
-    this.hide();
-  }
-
 }
 
 
