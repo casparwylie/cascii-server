@@ -217,13 +217,13 @@ func TestGetMutableDrawing_successful(t *testing.T) {
 func TestUpdateMutableDrawing_notFound(t *testing.T) {
 	clearDb()
 	_, client := LoginUser("test@test.com")
-	resp := PutWithClient(
+	resp := PatchWithClient(
 		client,
 		DRAWINGS_API+fmt.Sprintf("mutable/%d", 999),
 		UpdateMutableDrawingRequest{Name: "test updated", Data: "{\"test\": \"updated\"}"},
 		&GenericResponse{},
 	)
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, http.StatusNotAcceptable, resp.StatusCode)
 }
 
 func TestUpdateMutableDrawing_successful(t *testing.T) {
@@ -236,7 +236,7 @@ func TestUpdateMutableDrawing_successful(t *testing.T) {
 		CreateMutableDrawingRequest{Name: "test", Data: "{\"test\": \"test\"}"},
 		&respBody1,
 	)
-	resp := PutWithClient(
+	resp := PatchWithClient(
 		client,
 		DRAWINGS_API+fmt.Sprintf("mutable/%d", respBody1.Id),
 		UpdateMutableDrawingRequest{Name: "updated", Data: "{\"test\": \"updated\"}"},
@@ -256,6 +256,66 @@ func TestUpdateMutableDrawing_successful(t *testing.T) {
 	assert.NotEmpty(t, respBody2.CreatedAt)
 }
 
+func TestUpdateMutableDrawing_OneFieldOnly(t *testing.T) {
+	clearDb()
+	userId, client := LoginUser("test@test.com")
+	var respBody1 CreateMutableDrawingResponse
+	PostWithClient(
+		client,
+		DRAWINGS_API+"mutable",
+		CreateMutableDrawingRequest{Name: "test", Data: "{\"test\": \"test\"}"},
+		&respBody1,
+	)
+	resp := PatchWithClient(
+		client,
+		DRAWINGS_API+fmt.Sprintf("mutable/%d", respBody1.Id),
+		UpdateMutableDrawingRequest{Data: "{\"test\": \"updated\"}"},
+		&GenericResponse{},
+	)
+	var respBody2 GetMutableDrawingResponse
+	GetWithClient(
+		client,
+		DRAWINGS_API+fmt.Sprintf("mutable/%d", respBody1.Id),
+		&respBody2,
+	)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, respBody1.Id, respBody2.Id)
+	assert.Equal(t, userId, respBody2.UserId)
+	assert.Equal(t, "{\"test\": \"updated\"}", respBody2.Data)
+	assert.Equal(t, "test", respBody2.Name) // Still original
+	assert.NotEmpty(t, respBody2.CreatedAt)
+}
+
+func TestUpdateMutableDrawing_noFieldsNoProblem(t *testing.T) {
+	clearDb()
+	userId, client := LoginUser("test@test.com")
+	var respBody1 CreateMutableDrawingResponse
+	PostWithClient(
+		client,
+		DRAWINGS_API+"mutable",
+		CreateMutableDrawingRequest{Name: "test", Data: "{\"test\": \"test\"}"},
+		&respBody1,
+	)
+	resp := PatchWithClient(
+		client,
+		DRAWINGS_API+fmt.Sprintf("mutable/%d", respBody1.Id),
+		UpdateMutableDrawingRequest{}, // Empty
+		&GenericResponse{},
+	)
+	var respBody2 GetMutableDrawingResponse
+	GetWithClient(
+		client,
+		DRAWINGS_API+fmt.Sprintf("mutable/%d", respBody1.Id),
+		&respBody2,
+	)
+	assert.Equal(t, http.StatusNotAcceptable, resp.StatusCode)
+	assert.Equal(t, respBody1.Id, respBody2.Id)
+	assert.Equal(t, userId, respBody2.UserId)
+	assert.Equal(t, "{\"test\": \"test\"}", respBody2.Data) // Still original
+	assert.Equal(t, "test", respBody2.Name)                 // Still original
+	assert.NotEmpty(t, respBody2.CreatedAt)
+}
+
 func TestUpdateMutableDrawing_differentUserNoAccess(t *testing.T) {
 	clearDb()
 	_, client1 := LoginUser("test@test.com")
@@ -267,20 +327,20 @@ func TestUpdateMutableDrawing_differentUserNoAccess(t *testing.T) {
 		CreateMutableDrawingRequest{Name: "test", Data: "{\"test\": \"test\"}"},
 		&respBody1,
 	)
-	resp1 := PutWithClient(
+	resp1 := PatchWithClient(
 		client1,
 		DRAWINGS_API+fmt.Sprintf("mutable/%d", respBody1.Id),
 		UpdateMutableDrawingRequest{Name: "test updated", Data: "{\"test\": \"updated\"}"},
 		&GenericResponse{},
 	)
-	resp2 := PutWithClient(
+	resp2 := PatchWithClient(
 		client2,
 		DRAWINGS_API+fmt.Sprintf("mutable/%d", respBody1.Id),
 		UpdateMutableDrawingRequest{Name: "updated again", Data: "{\"test\": \"updated again\"}"},
 		&GenericResponse{},
 	)
 	assert.Equal(t, http.StatusOK, resp1.StatusCode)
-	assert.Equal(t, http.StatusNotFound, resp2.StatusCode)
+	assert.Equal(t, http.StatusNotAcceptable, resp2.StatusCode)
 }
 
 func TestDeleteMutableDrawing_notFound(t *testing.T) {

@@ -59,8 +59,8 @@ type CreateMutableDrawingResponse struct {
 }
 
 type UpdateMutableDrawingRequest struct {
-	Data string `json:"data" validate:"required,json"`
-	Name string `json:"name" validate:"required"`
+	Data string `json:"data"`
+	Name string `json:"name"`
 }
 
 type GetMutableDrawingResponse struct {
@@ -317,7 +317,7 @@ func UpdateMutableDrawingHandler(db *sql.DB, userId int, w http.ResponseWriter, 
 		return
 	}
 	if !updated {
-		WriteGenericResponse(w, http.StatusNotFound, "Drawing not found")
+		WriteGenericResponse(w, http.StatusNotAcceptable, "Nothing to update")
 		return
 	}
 	WriteGenericResponse(w, http.StatusOK, "")
@@ -372,7 +372,7 @@ func Router(servicers *Servicers) *mux.Router {
 	drawingsRouter.Handle("/immutable", Handler{servicers, CreateImmutableDrawingHandler}).Methods("POST")
 	drawingsRouter.Handle("/immutable/{short_key}", Handler{servicers, GetImmutableDrawingHandler}).Methods("GET")
 	drawingsRouter.Handle("/mutable", AuthHandler{servicers, CreateMutableDrawingHandler}).Methods("POST")
-	drawingsRouter.Handle("/mutable/{id}", AuthHandler{servicers, UpdateMutableDrawingHandler}).Methods("PUT")
+	drawingsRouter.Handle("/mutable/{id}", AuthHandler{servicers, UpdateMutableDrawingHandler}).Methods("PATCH")
 	drawingsRouter.Handle("/mutable/{id}", AuthHandler{servicers, GetMutableDrawingHandler}).Methods("GET")
 	drawingsRouter.Handle("/mutable/{id}", AuthHandler{servicers, DeleteMutableDrawingHandler}).Methods("DELETE")
 	drawingsRouter.Handle("/mutables", AuthHandler{servicers, ListMutableDrawingsHandler}).Methods("GET")

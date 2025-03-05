@@ -49,8 +49,8 @@ func Post(url string, req any, res any) *http.Response {
 	return PostWithClient(&http.Client{}, url, req, res)
 }
 
-func Put(url string, req any, res any) *http.Response {
-	return PutWithClient(&http.Client{}, url, req, res)
+func Patch(url string, req any, res any) *http.Response {
+	return PatchWithClient(&http.Client{}, url, req, res)
 }
 
 func Get(url string, res any) *http.Response {
@@ -61,10 +61,10 @@ func Delete(url string, res any) *http.Response {
 	return DeleteWithClient(&http.Client{}, url, res)
 }
 
-func PutWithClient(client *http.Client, url string, req any, res any) *http.Response {
+func PatchWithClient(client *http.Client, url string, req any, res any) *http.Response {
 	var buf bytes.Buffer
-	json.NewEncoder(&buf).Encode(req)                          // Writes to buf
-	request, err := http.NewRequest(http.MethodPut, url, &buf) // Reads from buf
+	json.NewEncoder(&buf).Encode(req)                            // Writes to buf
+	request, err := http.NewRequest(http.MethodPatch, url, &buf) // Reads from buf
 	if err != nil {
 		panic(err)
 	}

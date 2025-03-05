@@ -80,7 +80,10 @@ func CreateMutableDrawing(db *sql.DB, data string, name string, userId int) (int
 
 func UpdateMutableDrawing(db *sql.DB, drawingId int, data string, name string, userId int) (bool, error) {
 	res, err := db.Exec(
-		"UPDATE mutable_drawings SET data = ?, name = ? WHERE id = ? AND user_id = ?",
+		`UPDATE mutable_drawings SET
+		data = COALESCE(NULLIF(?, ''), data),
+		name = COALESCE(NULLIF(?, ''), name)
+		WHERE id = ? AND user_id = ?`,
 		data,
 		name,
 		drawingId,
