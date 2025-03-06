@@ -115,6 +115,8 @@ class Theme {
     informerBadFgColor: Theme.Color.black,
 
     canvasFont: "monospace",
+
+    warningRed: Theme.Color.red,
   }
 
   constructor(config) {
@@ -845,7 +847,7 @@ class LayerManager {
   }
 
   import(encodedData) {
-    this.empty();
+    this.refresh(() => this.empty());
     let data = JSON.parse(encodedData);
     this.layers = this.decodeLayers(data.layers);
     this.groupManager.layerGroups = data.groups;
@@ -3738,7 +3740,7 @@ class Component {
   type = "div";
 
   // Use this if you don't want a component's children to be traversed for theme setting.
-  skipTheme = false; 
+  skipChildrenTheme = false; 
 
   constructor(props) {
     this.visible = true;
@@ -3800,8 +3802,9 @@ class Component {
   defineTheme() {}
 
   renderTheme() {
-    this.defineTheme();
     if (this.skipTheme) return;
+    this.defineTheme();
+    if (this.skipChildrenTheme) return;
     this.children.forEach(child => child.renderTheme());
   }
 
@@ -3833,6 +3836,9 @@ class Component {
   }
 
   css(style, value) {
+    // Check for priority styles
+    if (this["Css_" + style] != undefined) value = this["Css_" + style];
+
     let valueFromTheme = themeManager.getTheme()[value];
     this.element.style[style] = valueFromTheme? valueFromTheme: value;
   }
@@ -4019,7 +4025,8 @@ class Pixel extends Component {
 
 class CanvasComponent extends Component {
   // Skip the theme to avoid all pixels being traversed. 
-  skipTheme = true;
+  skipChildrenTheme = true;
+  skipTheme = false;
 
   accessibleBy = "canvasComponent";
 
@@ -4168,12 +4175,10 @@ class PopupComponent extends Component {
   isPopup = true;
   disableModes = false;
 
-  toggle() {
-    if (!this.visible && this.disableModes) {
-      modeMaster.reset();
-    }
+  show() {
     bodyComponent.hidePopups();
-    super.toggle();
+    if (this.disableModes) modeMaster.reset();
+    super.show();
   }
 
   renderCallback() {
@@ -4637,7 +4642,9 @@ class InformerComponent extends Component {
     return [this.moodCharComponent, this.messageComponent];
   }
 
-  report(message, mood) {
+  report(message, mood, time=null) {
+    if (time == null) time = message.length * 150;
+    if (time == -1) time = 100000000;
     let moodChar = "";
     switch (mood) {
       case "good":
@@ -4657,7 +4664,15 @@ class InformerComponent extends Component {
     this.messageComponent.setValue(message);
     this.moodCharComponent.setValue(moodChar);
     this.show();
-    setTimeout(() => this.hide(), message.length * 150);
+    setTimeout(() => this.hide(), time);
+  }
+
+  loading() {
+    this.report("Loading...", "", -1);
+  }
+
+  loadingFinish() {
+    this.hide();
   }
 
   renderCallback() {

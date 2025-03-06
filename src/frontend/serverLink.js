@@ -2,6 +2,7 @@ var userManager;
 var drawingManager;
 
 async function postRequest(url, data) {
+  bodyComponent.informerComponent.loading();
   let response = await fetch(url,
     {
       method: "POST",
@@ -11,10 +12,12 @@ async function postRequest(url, data) {
   );
   var result = await response.json();
   result.statusCode = response.status;
+  bodyComponent.informerComponent.loadingFinish();
   return result;
 }
 
 async function patchRequest(url, data) {
+  bodyComponent.informerComponent.loading();
   let response = await fetch(url,
     {
       method: "PATCH",
@@ -24,14 +27,35 @@ async function patchRequest(url, data) {
   );
   var result = await response.json();
   result.statusCode = response.status;
+  bodyComponent.informerComponent.loadingFinish();
   return result;
 }
 
 async function getRequest(url) {
+  bodyComponent.informerComponent.loading();
   let result = await fetch(url);
   let json = await result.json();
   json.statusCode = result.status;
+  bodyComponent.informerComponent.loadingFinish();
   return json
+}
+
+async function deleteRequest(url) {
+  bodyComponent.informerComponent.loading();
+  let result = await fetch(url, {method: "DELETE"});
+  let json = await result.json();
+  json.statusCode = result.status;
+  bodyComponent.informerComponent.loadingFinish();
+  return json
+}
+
+function handleResponse(response, msg="", silentErr=false) {
+  if (response.error && response.error.length > 0) {
+    if (!silentErr) bodyComponent.informerComponent.report(response.error, "bad");
+    return false;
+  } 
+  if (msg.length > 0) bodyComponent.informerComponent.report(msg, "good");
+  return true;
 }
 
 function getCookie(name) {
@@ -61,6 +85,7 @@ class UserManager {
     return [
       bodyComponent.rightMenuComponent.logoutButtonComponent,
       bodyComponent.rightMenuComponent.saveButtonComponent,
+      bodyComponent.rightMenuComponent.newButtonComponent,
       bodyComponent.rightMenuComponent.myDrawingsButtonComponent,
       bodyComponent.rightMenuComponent.welcomeMsgComponent,
     ]
@@ -91,9 +116,8 @@ class UserManager {
     this.guestOnlyComponents().forEach(component => component.hide());
   }
 
-  signupCallback(response) {
-    if (response.error == "") {
-      bodyComponent.informerComponent.report("Successfully signed up!", "good");
+  async signup(data) {
+    if (handleResponse(await this.signupUser(data), "Successfully signed up!")) {
       bodyComponent.signupComponent.hide();
       bodyComponent.loginComponent.formComponent.formFieldEmail.setValue(
         bodyComponent.signupComponent.formComponent.formFieldEmail.getValue()
@@ -102,48 +126,54 @@ class UserManager {
         bodyComponent.signupComponent.formComponent.formFieldPassword.getValue()
       )
       bodyComponent.signupComponent.formComponent.formClear();
-      return;
     }
-    bodyComponent.informerComponent.report(response.error, "bad");
-  }
-
-  async loginCallback(response) {
-    if (response.error == "") {
-      bodyComponent.informerComponent.report("Successfully logged in!", "good");
-      bodyComponent.loginComponent.hide();
-      bodyComponent.loginComponent.formComponent.formClear();
-      await userManager.update();
-      return;
-    }
-    bodyComponent.informerComponent.report(response.error, "bad");
   }
 
   async update() {
-    await this.setUser();
+    this.user = null;
+    let response = await this.getUser();
+    if (handleResponse(response, "", true)) {
+      this.user = {email: response.email, userId: response.id};
+    }
     this.isLoggedin()? this.renderLogin(): this.renderLogout();
   }
 
-  async setUser() {
-    let response = await getRequest("/api/user/");
-    if (response.id > -1 && response.email.length > 0) {
-      this.user = {email: response.email, userId: response.id};
-      return
+  async login(data) {
+    if (handleResponse(await this.loginUser(data))) {
+      await userManager.update();
+      if (!this.isLoggedin()) return;
+      
+      // In case a different user on same browser comes along
+      drawingManager.unsetCurrentDrawing();
+
+      bodyComponent.informerComponent.report("Successfully logged in!", "good");
+      bodyComponent.loginComponent.hide();
+      bodyComponent.loginComponent.formComponent.formClear();
     }
-    this.user = null;
   }
 
   async logout() {
-    await getRequest("/api/user/logout");
-    await this.update();
-    bodyComponent.hidePopups();
-    bodyComponent.informerComponent.report("Successfully logged out!", "good");
+    if (handleResponse(await this.logoutUser())) {
+      await this.update();
+      if (this.isLoggedin()) return;
+      bodyComponent.hidePopups();
+      bodyComponent.informerComponent.report("Successfully logged out!", "good");
+    }
   }
 
-  async login(data) {
+  async getUser() {
+    return await getRequest("/api/user/");
+  }
+
+  async logoutUser() {
+    return await getRequest("/api/user/logout");
+  }
+
+  async loginUser(data) {
     return await postRequest("/api/user/auth", data);
   }
 
-  async signup(data) {
+  async signupUser(data) {
     return await postRequest("/api/user/", data);
   }
 }
@@ -151,61 +181,178 @@ class UserManager {
 
 class DrawingManager {
   
-  constructor() {
-    this.currentDrawingId = null; // TODO: Fetch from local storage
-  }
-  
   isNewDrawing() {
-    return this.currentDrawingId == null;
+    return !this.getCurrentDrawing();
+  }
+
+  getCurrentDrawing() {
+    return localStorage.getItem("currentDrawingId");
   }
 
   setCurrentDrawing(id) {
-    this.currentDrawingId = id;
+    localStorage.setItem("currentDrawingId", id);
+  }
+
+  unsetCurrentDrawing() {
+    this.setCurrentDrawing("");
+  }
+
+  startNewDrawing() {
+    this.unsetCurrentDrawing();
+    layerManager.refresh(() => layerManager.empty());
+    bodyComponent.informerComponent.report("Blank canvas is ready!");
   }
 
   async saveOrCreate(data) {
-    layerManager.saveToLocalStorage(); // TODO: When a different drawing is loaded, do this too
+    layerManager.saveToLocalStorage();
     if (this.isNewDrawing()) {
       bodyComponent.createNewDrawingComponent.show();
       return;
     }
-    await this.save(this.currentDrawingId, response => this.saveCallback(response));
-  }
-
-  async save(id, callback) {
-    let response = await patchRequest(
-      "/api/drawings/mutable/" + id,
-      {"data": layerManager.encodeAll()}
-    );
-    callback(response);
+    handleResponse(await this.saveDrawing(this.getCurrentDrawing()), "Successfully saved!");
   }
 
   async create(data) {
+    let response = await this.createDrawing(data);
+    if (handleResponse(response, "Successfully saved!")) {
+      this.setCurrentDrawing(response.id);  
+      bodyComponent.createNewDrawingComponent.hide();
+      bodyComponent.listDrawingsComponent.show();
+    }
+  }
+
+  async open(drawingId) {
+    let response = await this.getDrawing(drawingId);
+    if (handleResponse(response)) {
+      this.setCurrentDrawing(drawingId);
+      // It's important we load into localStorage too immediately as a side effect.
+      // layerManager.import currently does this impliclity with redraw.
+      layerManager.import(response.data);
+      bodyComponent.hidePopups();
+    } 
+  }
+
+  async delete(drawingId, callback) {
+    if (handleResponse(await this.deleteDrawing(drawingId), "Successfully deleted!")) {
+      if (drawingId == this.getCurrentDrawing()) this.unsetCurrentDrawing();
+      callback();
+    }
+  }
+
+  async getDrawings() {
+    return (await getRequest("/api/drawings/mutables")).results || [];
+  }
+
+  async getDrawing(drawingId) {
+    return await getRequest("/api/drawings/mutable/" + drawingId);
+  }
+
+  async deleteDrawing(drawingId) {
+    return await deleteRequest("/api/drawings/mutable/" + drawingId);
+  }
+
+  async saveDrawing(id) {
+    let data = {"data": layerManager.encodeAll()};
+    return  await patchRequest("/api/drawings/mutable/" + id, data);
+  }
+
+  async createDrawing(data) {
     data = {...data, "data": layerManager.encodeAll()};
     return await postRequest("/api/drawings/mutable", data);
   }
-  
-  saveCallback(response) {
-    if (response.error.length > 0) {
-      bodyComponent.informerComponent.report(response.error, "bad");
-      return;
-    }
-    bodyComponent.informerComponent.report("Successfully saved!", "good");
+
+}
+
+
+class ListDrawingsComponent extends PopupComponent {
+  css_width           = "400px";
+  css_marginLeft      = "calc(50vw - 200px)";
+  css_overflow        = "auto";
+  css_maxHeight       = "600px";
+
+  disableModes = true;
+
+  defineChildren() {
+    return [
+      new Component({
+        accessibleBy: "headingComponent",
+        css_width: "100%",
+        css_height: "15%",
+        css_textAlign: "center",
+        value: "<h2>My Drawings</h2>",
+      }),
+      new Component({
+        accessibleBy: "resultsComponent",
+        css_width: "100%",
+      }),
+    ]
   }
 
-  createCallback(response) {
-    if (response.id > -1) {
-      bodyComponent.informerComponent.report("Successfully saved!", "good");
-      this.setCurrentDrawing(response.id);  
-      bodyComponent.createNewDrawingComponent.hide();
+  async populate() {
+    let drawings = await drawingManager.getDrawings();
+    this.resultsComponent.setValue("");
+    if (drawings.length == 0) {
+      this.headingComponent.setValue("<h2>No saved drawings!</h2>");
       return;
     }
-    if (response.error.length > 0) {
-      bodyComponent.informerComponent.report(response.error, "bad");
-      bodyComponent.createNewDrawingComponent.hide();
+    this.headingComponent.setValue("<h2>My Drawings</h2>");
+    for (let drawing of drawings) {
+      this.resultsComponent.addChild(new Component({
+        css_padding: "5px",
+        css_fontSize: "15px",
+        css_borderColor: "bodyFgColor",
+        css_display: "flex",
+        css_justifyContent: "space-between",
+        width: "100%",
+        children: [
+          new Component({
+            children: [
+              new Component({
+                value: drawing.name,
+                css_cursor: "pointer",
+                on_mousedown: () => drawingManager.open(drawing.id),
+              }),
+              new Component({value: drawing.created_at, css_fontSize: "11px"}),
+            ]
+          }),
+          new Component({
+            css_display: "flex",
+            css_justifyContent: "space-around",
+            css_columnGap: "3px",
+            children: [
+              new ButtonComponent({
+                value: "Export",
+                Css_height: "30px",
+                css_padding: "2px"
+              }),
+              new ButtonComponent({
+                value: "Rename",
+                Css_height: "30px",
+                css_padding: "2px"
+              }),
+              new ButtonComponent({
+                value: "Delete",
+                Css_height: "30px",
+                css_padding: "2px",
+                Css_color: "warningRed",
+                on_mousedown: async () => await drawingManager.delete(
+                  drawing.id,
+                  () => this.populate(),
+                ),
+              }),
+            ]
+          }),
+        ],
+      }));
     }
   }
+
+  async show() {
+    super.show();
+    await this.populate();
+  }
 }
+
 
 class CreateNewDrawingComponent extends PopupComponent {
   css_width           = "300px";
@@ -220,13 +367,12 @@ class CreateNewDrawingComponent extends PopupComponent {
         css_width: "100%",
         css_height: "15%",
         css_textAlign: "center",
-        value: "<h2>Save drawing</h2>",
+        value: "<h2>Save Drawing</h2>",
       }),
       new FormComponent({
         accessibleBy: "formComponent",
         formFields: {"name": "Name"},
-        formOnSubmit: async (data) => await drawingManager.create(data),
-        formCallback: (response) => drawingManager.createCallback(response),
+        formOnSubmit: (data) => drawingManager.create(data),
         formSubmitValue: "Save!",
         formFieldProps: {
           css_width: "100%",
@@ -305,7 +451,6 @@ class FormComponent extends Component {
       if (!data[field].length) return;
     }
     let response = await this.formOnSubmit(data);
-    this.formCallback(response);
   }
 }
 
@@ -328,7 +473,6 @@ class UserSignUpComponent extends PopupComponent {
         accessibleBy: "formComponent",
         formFields: {"email": "Email", "password": "Password"},
         formOnSubmit: (data) => userManager.signup(data),
-        formCallback: (response) => userManager.signupCallback(response),
         formSubmitValue: "Sign Up",
         formFieldProps: {
           css_width: "100%",
@@ -366,7 +510,6 @@ class UserLoginComponent extends PopupComponent {
         accessibleBy: "formComponent",
         formFields: {"email": "Email", "password": "Password"},
         formOnSubmit: (data) => userManager.login(data),
-        formCallback: async (response) => await userManager.loginCallback(response),
         formSubmitValue: "Login",
         formFieldProps: {
           css_width: "100%",
@@ -433,18 +576,26 @@ class RightMenuComponent extends MenuComponent {
     ), 
     new MenuButtonComponent(
       {
-        value: "Save",
-        accessibleBy: "saveButtonComponent",
-        on_click: async () => await drawingManager.saveOrCreate(),
+        value: "+ New",
+        accessibleBy: "newButtonComponent",
+        on_click: async () => drawingManager.startNewDrawing(),
         css_width: "100%",
         Css_marginTop: "40px",
       }
     ), 
     new MenuButtonComponent(
       {
+        value: "Save",
+        accessibleBy: "saveButtonComponent",
+        on_click: async () => await drawingManager.saveOrCreate(),
+        css_width: "100%",
+      }
+    ), 
+    new MenuButtonComponent(
+      {
         value: "My Drawings",
         accessibleBy: "myDrawingsButtonComponent",
-        on_click: () => bodyComponent.signupComponent.toggle(),
+        on_click: async () => await bodyComponent.listDrawingsComponent.toggle(),
         css_width: "100%",
       }
     ), 
@@ -456,6 +607,7 @@ async function mainServerClient() {
   bodyComponent.addChild(new UserLoginComponent({accessibleBy: "loginComponent"}));
   bodyComponent.addChild(new RightMenuComponent({accessibleBy: "rightMenuComponent"}));
   bodyComponent.addChild(new CreateNewDrawingComponent({accessibleBy: "createNewDrawingComponent"}));
+  bodyComponent.addChild(new ListDrawingsComponent({accessibleBy: "listDrawingsComponent"}));
 
   userManager = new UserManager();
   drawingManager = new DrawingManager();
