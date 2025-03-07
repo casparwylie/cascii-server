@@ -10,6 +10,7 @@ IMPROVEMENTS (arguably features):
 
 var layerManager;
 var eventManager;
+var externalHookManager;
 var areaSelectManager;
 var modeMaster;
 var charManager;
@@ -321,6 +322,25 @@ class ModeMaster {
 ////////////////
 //// EVENTS ////
 ////////////////
+class BaseExternalHookManager {
+  /*
+    This class should be overridden by optional dependencies
+    allowing upstream functionality for specific hooks coming from this core app.
+
+    E.g It is used to trigger server hooks for the server layer which,
+    by design, is optionally attached.
+
+    I want this file to open as an index.html and work out-of-the box,
+    with 0 dependencies on a server, packaging, etc.
+  */
+
+  async getShortKeyUrl() {
+    // Without a server, we return an empty short key. 
+    return "";
+  }
+
+}
+
 
 class EventDef {
   constructor(modeCondition, modeUpdate, callback=()=>{}) {
@@ -4096,9 +4116,8 @@ class CanvasComponent extends Component {
     return [maxCol, minCol, maxRow, minRow];
   }
 
-  exportToClipboard() {
+  async exportToClipboard() {
     layerManager.switchModeCallback();
-
     // Scrape text from canvas with linebreaks
     var text = "";
     let [maxCol, minCol, maxRow, minRow] = this.getCroppedRowsCols();
@@ -4112,6 +4131,11 @@ class CanvasComponent extends Component {
       }
       if(rowText.split("").filter(v => v != " ").length == 0) continue;
       text += `${rowText}\n`;
+    }
+
+    let shortKey = await externalHookManager.getShortKeyUrl();
+    if (shortKey.length > 0)  {
+        text += `\n\nEdit/view: ${shortKey}\n`;
     }
 
     // This is a slight hack to preserve styles if possible.
@@ -4203,7 +4227,7 @@ class HelpComponent extends PopupComponent {
 <div style='text-align: center;'><h2>Welcome</h2>
 
 <p>
-This is the first well-equipped ASCII diagram builder available on the internet.
+This is one of the few well-equipped ASCII diagram builders freely available on the internet.
 It stresses portability, simplicity, and immediateness. ASCII diagrams are
 the best balance between pen to paper and advanced graphical builders, while also allowing
 users to present visual information in places that can
@@ -4217,17 +4241,37 @@ By using text, you avoid the need for file formats, attaching documents and over
  Unicode is prettier but less reliable. Depending on where it's used,
  it could display in unexpected ways. Here, both modes try their best
  to use the most appropriate characters, but each mode does not promise
- absolute ASCII or Unicode.
+ absolute ASCII or Unicode. You can change mode in Settings.
+ <h4>How do I export my drawing?</h4>
+ Simply select Export on the top menu, and your drawing
+ will be copied to your clipboard. A short link will be included
+ so that you / others can edit the drawing later. It's recommended
+ you keep this short link to avoid loosing the ability to find / edit it later.
+ Exported drawings are immutable; editing via a short link is a copy of the original.
+ <br><br>
+ <b>Remember, the view in which you paste the drawing must use a fixed-width font,
+ and have a width greater than what you've drawn or not wrap text.
+ Otherwise you'll see a mess.</b>
+
+ <h4>Why sign up?</h4>
+ Only sign up if you care about managing and tracking your drawings.
+ For convenience, your active drawing is saved to the browser, but 
+ to save multiple reliably and cross-device, an account is recommended.
+ Passwords are Bcrypt-10 encrypted.
+ <h4>Account Management</h4>
+ If you wish to delete your account, recover a lost account, or anything else,
+ please get in touch at <b>casparwylie@gmail.com</b>, using the email you 
+ originally signed up with.
  <h4>How do I contribute?</h4>
- ...
+ Feel free to contribute on <a href="github.com/casparwylie/ascii">GitHub</a>.
  <h4>Feature requests?</h4>
- ...
+ Please use the Issue Tracker on <a href="github.com/casparwylie/ascii">GitHub</a>.
  <h4></h4>
 <h2>Usage</h2>
 <h2>Shortcuts</h2>
 </div>
 <span style='white-space: pre-wrap'>
-<b>g</b>                   Group
+<b>ctrl-g</b>              Group
 <b>ctrl-c</b>              Copy layer
 <b>ctrl-z</b>              Undo
 <b>ctrl-shift-z</b>        Redo
@@ -4241,6 +4285,13 @@ By using text, you avoid the need for file formats, attaching documents and over
 
   defineChildren() {
     return [];
+  }
+
+  showIfFirstVisit() {
+    if (!localStorage.getItem("visited")) {
+      this.show();
+    }
+    localStorage.setItem("visited", true);
   }
 }
 
@@ -4510,11 +4561,11 @@ class MainMenuComponent extends ModeMenuComponent {
       [], [], [], (event) => layerManager.redoEvent(event)),
     new ModeMenuButtonComponent("x", "Restart",
       [], [], [], () => layerManager.refresh(() => layerManager.empty())),
-    new ModeMenuButtonComponent("->", "Export",
+    new ModeMenuButtonComponent("->", "<b>Export</b>",
       [], [], [], () => canvas.exportToClipboard()),
-    new ModeMenuButtonComponent("⚙", "Settings",
+    new ModeMenuButtonComponent("⚙", "<b>Settings</b>",
       [], [], [], () => bodyComponent.settingsComponent.toggle()),
-    new ModeMenuButtonComponent("?", "Help",
+    new ModeMenuButtonComponent("?", "<b>Help</b>",
       [], [], [], () => bodyComponent.helpComponent.toggle()),
   ]
 }
@@ -4612,7 +4663,8 @@ class CanvasDumpComponent extends Component {
   css_color           = "black";
   css_whiteSpace      = "pre-wrap";
   // Hide far away (body overflow is hidden)
-  css_marginLeft      = "500vw";
+  css_position         = "absolute";
+  css_marginLeft       = "500vw";
 }
 
 
@@ -4631,15 +4683,25 @@ class InformerComponent extends Component {
   css_textWeight       = "bold";
   css_zIndex           = "100";
 
-  moodCharComponent = new Component({css_fontSize: "25px", type: "span", css_verticalAlign: "middle"});
-  messageComponent = new Component({css_marginLeft: "10px", type: "span", css_verticalAlign: "middle"});
-
   defineTheme() {
     this.css("color", "bodyFgColor");
   }
 
   defineChildren() {
-    return [this.moodCharComponent, this.messageComponent];
+    return [
+      new Component({
+        accessibleBy: "moodCharComponent",
+        css_fontSize: "25px",
+        type: "span",
+        css_verticalAlign: "middle",
+      }),
+      new Component({
+        accessibleBy: "messageComponent",
+        css_marginLeft: "10px",
+        type: "span",
+        css_verticalAlign: "middle",
+      }),
+    ]
   }
 
   report(message, mood, time=null) {
@@ -4715,12 +4777,13 @@ class Body extends Component {
 
 
 function main() {
-  layerManager       = new LayerManager();
-  modeMaster         = new ModeMaster();
-  areaSelectManager  = new AreaSelectManager();
-  eventManager       = new EventManager();
-  charManager        = new CharManager();
-  themeManager       = new ThemeManager();
+  layerManager         = new LayerManager();
+  modeMaster           = new ModeMaster();
+  areaSelectManager    = new AreaSelectManager();
+  eventManager         = new EventManager();
+  externalHookManager  = new BaseExternalHookManager();
+  charManager          = new CharManager();
+  themeManager         = new ThemeManager();
 
   bodyComponent = new Body();
   bodyComponent.render();
@@ -4732,10 +4795,12 @@ function main() {
   );
 
   layerManager.importFromLocalStorage();
+
+  bodyComponent.helpComponent.showIfFirstVisit();
 }
 
 main(); // :)
 </script>
 
 <!-- By design, this can happily 404 and run without a backend -->
-<script src="/serverLink.js"></script>
+<script src="/static/serverLink.js"></script>

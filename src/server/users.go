@@ -2,17 +2,27 @@ package main
 
 import (
 	"database/sql"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 10)
+	return string(bytes), err
+}
 func MakeSessionKey() string {
 	return GenerateUUID()
 }
 
 func CreateUser(db *sql.DB, email string, password string) error {
-	_, err := db.Exec(
+	password, err := HashPassword(password)
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec(
 		"INSERT INTO users (email, password) VALUES (?, ?)",
 		email,
-		Hash(password),
+		password,
 	)
 	return err
 }
@@ -37,15 +47,22 @@ func UserExists(db *sql.DB, email string) (bool, error) {
 
 func Authenticate(db *sql.DB, email string, password string) (int, error) {
 	userId := -1
+	hash := ""
 	err := db.QueryRow(
-		"SELECT id FROM users WHERE email = ? AND password = ?",
+		"SELECT password, id FROM users WHERE email = ?",
 		email,
-		Hash(password),
-	).Scan(&userId)
-	if err == nil || err == sql.ErrNoRows {
-		return userId, nil
+	).Scan(&hash, &userId)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return -1, nil
+		}
+		return -1, err
 	}
-	return userId, err
+	err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	if err != nil {
+		return -1, nil
+	}
+	return userId, nil
 }
 
 func CreateSession(db *sql.DB, userId int) (string, error) {

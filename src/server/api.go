@@ -359,9 +359,7 @@ func ListMutableDrawingsHandler(db *sql.DB, userId int, w http.ResponseWriter, r
 	)
 }
 
-func Router(servicers *Servicers) *mux.Router {
-	router := mux.NewRouter()
-
+func AddApiRoutes(router *mux.Router, servicers *Servicers) {
 	userRouter := router.PathPrefix("/api/user").Subrouter()
 	userRouter.Handle("/", Handler{servicers, CreateUserHandler}).Methods("POST")
 	userRouter.Handle("/", AuthHandler{servicers, GetUserHandler}).Methods("GET")
@@ -376,7 +374,4 @@ func Router(servicers *Servicers) *mux.Router {
 	drawingsRouter.Handle("/mutable/{id}", AuthHandler{servicers, GetMutableDrawingHandler}).Methods("GET")
 	drawingsRouter.Handle("/mutable/{id}", AuthHandler{servicers, DeleteMutableDrawingHandler}).Methods("DELETE")
 	drawingsRouter.Handle("/mutables", AuthHandler{servicers, ListMutableDrawingsHandler}).Methods("GET")
-
-	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./frontend")))
-	return router
 }

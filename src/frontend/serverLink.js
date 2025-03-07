@@ -1,5 +1,10 @@
 var userManager;
 var drawingManager;
+var routeManager;
+
+
+const SHORT_URL_HOST = "b2a.am"
+
 
 async function postRequest(url, data) {
   bodyComponent.informerComponent.loading();
@@ -49,6 +54,7 @@ async function deleteRequest(url) {
   return json
 }
 
+
 function handleResponse(response, msg="", silentErr=false) {
   if (response.error && response.error.length > 0) {
     if (!silentErr) bodyComponent.informerComponent.report(response.error, "bad");
@@ -61,6 +67,44 @@ function handleResponse(response, msg="", silentErr=false) {
 function getCookie(name) {
   // Cheers https://stackoverflow.com/a/25490531/27835424
   return document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)')?.pop() || ''
+}
+
+class ServeExternalHookManager extends BaseExternalHookManager {
+  
+  async getShortKeyUrl() {
+    var host = window.location.host;
+    if (!host.includes("localhost") && SHORT_URL_HOST.length > 0) {
+     host = SHORT_URL_HOST; 
+    }
+    let response = await drawingManager.createImmutableDrawing();
+    if (handleResponse(response, "", true)) {
+      return `${window.location.protocol}//${host}/${response.short_key}`;
+    }
+    return "";
+  }
+}
+
+
+class RouteManager {
+
+  constructor() {
+    this.routes = [];
+  }
+
+  addRoutes(...routes) {
+    this.routes = this.routes.concat(routes);
+  }
+
+  handle() {
+    let path = window.location.pathname.replace(/[\/]*$/, "");
+    for (let [regex, func] of this.routes) {
+      let result = regex.exec(path);
+      if (result != null) {
+        func(result.groups);
+        return;
+      }
+    }
+  }
 }
 
 
@@ -199,31 +243,46 @@ class DrawingManager {
 
   startNewDrawing() {
     this.unsetCurrentDrawing();
+    bodyComponent.hidePopups();
     layerManager.refresh(() => layerManager.empty());
     bodyComponent.informerComponent.report("Blank canvas is ready!");
   }
-
-  async saveOrCreate(data) {
+  
+  async saveButtonUpdateOrCreate(data) {
+    // If you "Save" and the drawing is new, then open the form with the intent to create.
+    // Otherwise, update the drawing data.
     layerManager.saveToLocalStorage();
     if (this.isNewDrawing()) {
-      bodyComponent.createNewDrawingComponent.show();
+      bodyComponent.editDrawingMetaComponent.showAsCreator();
       return;
     }
     handleResponse(await this.saveDrawing(this.getCurrentDrawing()), "Successfully saved!");
   }
 
-  async create(data) {
+  async editMetaFormCreate(data) {
     let response = await this.createDrawing(data);
-    if (handleResponse(response, "Successfully saved!")) {
+    if (handleResponse(response)) {
       this.setCurrentDrawing(response.id);  
-      bodyComponent.createNewDrawingComponent.hide();
-      bodyComponent.listDrawingsComponent.show();
+      bodyComponent.editDrawingMetaComponent.hide();
+      await bodyComponent.listDrawingsComponent.show();
+
+      // This get's defered so that listing loading doesn't replace it.
+      bodyComponent.informerComponent.report("Successfully saved!", "good");
+    }
+  }
+
+  async editMetaFormUpdate(data, drawingId) {
+    let response = await this.updateMetadataDrawing(drawingId, data);
+    if (handleResponse(response)) {
+      await bodyComponent.listDrawingsComponent.show();
+      // This get's defered so that listing loading doesn't replace it.
+      bodyComponent.informerComponent.report("Successfully updated!", "good");
     }
   }
 
   async open(drawingId) {
     let response = await this.getDrawing(drawingId);
-    if (handleResponse(response)) {
+    if (handleResponse(response, "Successfully loaded!")) {
       this.setCurrentDrawing(drawingId);
       // It's important we load into localStorage too immediately as a side effect.
       // layerManager.import currently does this impliclity with redraw.
@@ -232,19 +291,53 @@ class DrawingManager {
     } 
   }
 
-  async delete(drawingId, callback) {
-    if (handleResponse(await this.deleteDrawing(drawingId), "Successfully deleted!")) {
-      if (drawingId == this.getCurrentDrawing()) this.unsetCurrentDrawing();
-      callback();
-    }
+  async duplicate(drawingId) {
+    // Same as this.open except we don't set the drawing as current so it is saved
+    // as a new one.
+    let response = await this.getDrawing(drawingId);
+    if (handleResponse(response, "Successfully made duplicate. Saving this will create a new drawing.")) {
+      this.unsetCurrentDrawing();
+      // It's important we load into localStorage too immediately as a side effect.
+      // layerManager.import currently does this impliclity with redraw.
+      layerManager.import(response.data);
+      bodyComponent.hidePopups();
+    } 
+  }
+  
+  async openFromShortKey(shortKey) {
+    let response = await this.getImmutableDrawing(shortKey);
+    if (handleResponse(response, "Successfully loaded. This is your own version of the original to edit freely.")) {
+      this.unsetCurrentDrawing();
+      // It's important we load into localStorage too immediately as a side effect.
+      // layerManager.import currently does this impliclity with redraw.
+      layerManager.import(response.data);
+      bodyComponent.hidePopups();
+
+      // This avoids a page reload switching back to the first version, given
+      // a user could have edited it (more up to date in localStorage now).
+      window.history.replaceState(null, document.title, "/")
+    } 
   }
 
+  async delete(drawingId, callback) {
+    if (handleResponse(await this.deleteDrawing(drawingId))) {
+      if (drawingId == this.getCurrentDrawing()) this.unsetCurrentDrawing();
+      await callback();
+      // This get's defered so that listing loading doesn't replace it.
+      bodyComponent.informerComponent.report("Successfully deleted!", "good");
+    }
+  }
+  
   async getDrawings() {
     return (await getRequest("/api/drawings/mutables")).results || [];
   }
 
   async getDrawing(drawingId) {
     return await getRequest("/api/drawings/mutable/" + drawingId);
+  }
+
+  async getImmutableDrawing(shortKey) {
+    return await getRequest("/api/drawings/immutable/" + shortKey);
   }
 
   async deleteDrawing(drawingId) {
@@ -256,11 +349,19 @@ class DrawingManager {
     return  await patchRequest("/api/drawings/mutable/" + id, data);
   }
 
+  async updateMetadataDrawing(id, data) {
+    return  await patchRequest("/api/drawings/mutable/" + id, data);
+  }
+
   async createDrawing(data) {
     data = {...data, "data": layerManager.encodeAll()};
     return await postRequest("/api/drawings/mutable", data);
   }
-
+  
+  async createImmutableDrawing() {
+    let data = {"data": layerManager.encodeAll()};
+    return await postRequest("/api/drawings/immutable", data);
+  }
 }
 
 
@@ -321,23 +422,25 @@ class ListDrawingsComponent extends PopupComponent {
             css_columnGap: "3px",
             children: [
               new ButtonComponent({
-                value: "Export",
+                value: "Duplicate",
                 Css_height: "30px",
-                css_padding: "2px"
+                css_padding: "2px",
+                on_mousedown: () => drawingManager.duplicate(drawing.id),
               }),
               new ButtonComponent({
                 value: "Rename",
                 Css_height: "30px",
-                css_padding: "2px"
+                css_padding: "2px",
+                on_mousedown: () => bodyComponent.editDrawingMetaComponent.showAsUpdater(drawing.id, drawing),
               }),
               new ButtonComponent({
                 value: "Delete",
                 Css_height: "30px",
                 css_padding: "2px",
                 Css_color: "warningRed",
-                on_mousedown: async () => await drawingManager.delete(
+                on_mousedown: () => drawingManager.delete(
                   drawing.id,
-                  () => this.populate(),
+                  async () => await this.populate(),
                 ),
               }),
             ]
@@ -354,7 +457,7 @@ class ListDrawingsComponent extends PopupComponent {
 }
 
 
-class CreateNewDrawingComponent extends PopupComponent {
+class EditDrawingMetaComponent extends PopupComponent {
   css_width           = "300px";
   css_height          = "200px";
   css_marginLeft      = "calc(50vw - 150px)";
@@ -372,7 +475,7 @@ class CreateNewDrawingComponent extends PopupComponent {
       new FormComponent({
         accessibleBy: "formComponent",
         formFields: {"name": "Name"},
-        formOnSubmit: (data) => drawingManager.create(data),
+        formOnSubmit: (data) => this.createOrUpdate(data),
         formSubmitValue: "Save!",
         formFieldProps: {
           css_width: "100%",
@@ -388,7 +491,30 @@ class CreateNewDrawingComponent extends PopupComponent {
       }),
     ]
   }
+  
+  hide() {
+    super.hide();
+    this.formComponent.formClear();
+  }
 
+  showAsUpdater(drawingId, currentData) {
+    this.forUpdating = drawingId;
+    this.show();
+    this.formComponent.formFieldName.setValue(currentData.name);
+  }
+
+  showAsCreator() {
+    this.forUpdating = -1;
+    this.show();
+  }
+
+  createOrUpdate(data) {
+    if (this.forUpdating == -1) {
+      drawingManager.editMetaFormCreate(data)
+    } else {
+      drawingManager.editMetaFormUpdate(data, this.forUpdating)
+    }
+  }
 }
 
 class InputComponent extends Component {
@@ -587,7 +713,7 @@ class RightMenuComponent extends MenuComponent {
       {
         value: "Save",
         accessibleBy: "saveButtonComponent",
-        on_click: async () => await drawingManager.saveOrCreate(),
+        on_click: async () => await drawingManager.saveButtonUpdateOrCreate(),
         css_width: "100%",
       }
     ), 
@@ -606,14 +732,23 @@ async function mainServerClient() {
   bodyComponent.addChild(new UserSignUpComponent({accessibleBy: "signupComponent"}));
   bodyComponent.addChild(new UserLoginComponent({accessibleBy: "loginComponent"}));
   bodyComponent.addChild(new RightMenuComponent({accessibleBy: "rightMenuComponent"}));
-  bodyComponent.addChild(new CreateNewDrawingComponent({accessibleBy: "createNewDrawingComponent"}));
+  bodyComponent.addChild(new EditDrawingMetaComponent({accessibleBy: "editDrawingMetaComponent"}));
   bodyComponent.addChild(new ListDrawingsComponent({accessibleBy: "listDrawingsComponent"}));
 
-  userManager = new UserManager();
-  drawingManager = new DrawingManager();
+  userManager         = new UserManager();
+  drawingManager      = new DrawingManager();
+  externalHookManager = new ServeExternalHookManager();
+  routeManager        = new RouteManager();
 
   userManager.hideAll();
   await userManager.update();
+
+
+  routeManager.addRoutes(
+    [/^\/(?<shortkey>[\w]+)$/, vars => drawingManager.openFromShortKey(vars.shortkey)],
+  )
+  routeManager.handle();
+
 }
 
 mainServerClient(); // :)
