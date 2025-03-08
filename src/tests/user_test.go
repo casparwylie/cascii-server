@@ -14,7 +14,7 @@ func TestCreateUser_shortPassword(t *testing.T) {
 	var respBody GenericResponse
 	resp := Post(
 		USER_API,
-		CreateUserRequest{Email: "test@test.com", Password: "123"},
+		CreateUserRequest{Email: "test@test.com", Password: "1234444"},
 		&respBody,
 	)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
