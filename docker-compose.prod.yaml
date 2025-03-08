@@ -1,7 +1,7 @@
 version: "3.9"
 
 services:
-  web:
+  ascii_server:
     container_name: ascii_server
     image: ${IMAGE_NAME}
     restart: always
