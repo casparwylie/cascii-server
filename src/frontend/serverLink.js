@@ -59,7 +59,7 @@ function handleResponse(response, msg="", silentErr=false) {
   if (response.error && response.error.length > 0) {
     if (!silentErr) bodyComponent.informerComponent.report(response.error, "bad");
     return false;
-  } 
+  }
   if (msg.length > 0) bodyComponent.informerComponent.report(msg, "good");
   return true;
 }
@@ -70,12 +70,9 @@ function getCookie(name) {
 }
 
 class ServeExternalHookManager extends BaseExternalHookManager {
-  
+
   async getShortKeyUrl() {
     var host = window.location.host;
-    if (!host.includes("localhost") && SHORT_URL_HOST.length > 0) {
-     host = SHORT_URL_HOST; 
-    }
     let response = await drawingManager.createImmutableDrawing();
     if (handleResponse(response, "", true)) {
       return `${window.location.protocol}//${host}/${response.short_key}`;
@@ -109,7 +106,7 @@ class RouteManager {
 
 
 class UserManager {
-  
+
   constructor() {
     this.user = null;
   }
@@ -147,7 +144,7 @@ class UserManager {
     let username = this.getUsername();
     bodyComponent.rightMenuComponent.welcomeMsgComponent.setValue("Welcome, " + username);
   }
-  
+
   renderLogout() {
     this.userOnlyComponents().forEach(component => component.hide());
     this.guestOnlyComponents().forEach(component => component.show());
@@ -186,7 +183,7 @@ class UserManager {
     if (handleResponse(await this.loginUser(data))) {
       await userManager.update();
       if (!this.isLoggedin()) return;
-      
+
       // In case a different user on same browser comes along
       drawingManager.unsetCurrentDrawing();
 
@@ -224,7 +221,7 @@ class UserManager {
 
 
 class DrawingManager {
-  
+
   isNewDrawing() {
     return !this.getCurrentDrawing();
   }
@@ -247,7 +244,7 @@ class DrawingManager {
     layerManager.refresh(() => layerManager.empty());
     bodyComponent.informerComponent.report("Blank canvas is ready!");
   }
-  
+
   async saveButtonUpdateOrCreate(data) {
     // If you "Save" and the drawing is new, then open the form with the intent to create.
     // Otherwise, update the drawing data.
@@ -262,7 +259,7 @@ class DrawingManager {
   async editMetaFormCreate(data) {
     let response = await this.createDrawing(data);
     if (handleResponse(response)) {
-      this.setCurrentDrawing(response.id);  
+      this.setCurrentDrawing(response.id);
       bodyComponent.editDrawingMetaComponent.hide();
       await bodyComponent.listDrawingsComponent.show();
 
@@ -288,7 +285,7 @@ class DrawingManager {
       // layerManager.import currently does this impliclity with redraw.
       layerManager.import(response.data);
       bodyComponent.hidePopups();
-    } 
+    }
   }
 
   async duplicate(drawingId) {
@@ -301,9 +298,9 @@ class DrawingManager {
       // layerManager.import currently does this impliclity with redraw.
       layerManager.import(response.data);
       bodyComponent.hidePopups();
-    } 
+    }
   }
-  
+
   async openFromShortKey(shortKey) {
     let response = await this.getImmutableDrawing(shortKey);
     if (handleResponse(response, "Successfully loaded. This is your own version of the original to edit freely.")) {
@@ -316,7 +313,7 @@ class DrawingManager {
       // This avoids a page reload switching back to the first version, given
       // a user could have edited it (more up to date in localStorage now).
       window.history.replaceState(null, document.title, "/")
-    } 
+    }
   }
 
   async delete(drawingId, callback) {
@@ -327,7 +324,7 @@ class DrawingManager {
       bodyComponent.informerComponent.report("Successfully deleted!", "good");
     }
   }
-  
+
   async getDrawings() {
     return (await getRequest("/api/drawings/mutables")).results || [];
   }
@@ -357,7 +354,7 @@ class DrawingManager {
     data = {...data, "data": layerManager.encodeAll()};
     return await postRequest("/api/drawings/mutable", data);
   }
-  
+
   async createImmutableDrawing() {
     let data = {"data": layerManager.encodeAll()};
     return await postRequest("/api/drawings/immutable", data);
@@ -491,7 +488,7 @@ class EditDrawingMetaComponent extends PopupComponent {
       }),
     ]
   }
-  
+
   hide() {
     super.hide();
     this.formComponent.formClear();
@@ -537,7 +534,7 @@ class FormComponent extends Component {
   // Example usage...
   // formFields = {"name", "Display Name", ...}
   // formFieldProps = {css_X: "X", ...}
-  // formOnSubmit = (data) => something(data) 
+  // formOnSubmit = (data) => something(data)
   // formSubmitValue = "Sign Up"
   //
   // All fields can be accessed on this form object by formField<Fieldname>
@@ -670,7 +667,7 @@ class RightMenuComponent extends MenuComponent {
         on_click: () => bodyComponent.loginComponent.toggle(),
         css_width: "100%",
       }
-    ), 
+    ),
     new MenuButtonComponent(
       {
         value: "Sign Up",
@@ -678,7 +675,7 @@ class RightMenuComponent extends MenuComponent {
         on_click: () => bodyComponent.signupComponent.toggle(),
         css_width: "100%",
       }
-    ), 
+    ),
     new Component(
       {
         value: "",
@@ -690,7 +687,7 @@ class RightMenuComponent extends MenuComponent {
         css_textAlign: "center",
         css_textShadow: "0px 0px 5px grey",
       }
-    ), 
+    ),
     new MenuButtonComponent(
       {
         value: "Logout",
@@ -699,7 +696,7 @@ class RightMenuComponent extends MenuComponent {
         css_width: "100%",
         Css_marginTop: "20px",
       }
-    ), 
+    ),
     new MenuButtonComponent(
       {
         value: "+ New",
@@ -708,7 +705,7 @@ class RightMenuComponent extends MenuComponent {
         css_width: "100%",
         Css_marginTop: "40px",
       }
-    ), 
+    ),
     new MenuButtonComponent(
       {
         value: "Save",
@@ -716,7 +713,7 @@ class RightMenuComponent extends MenuComponent {
         on_click: async () => await drawingManager.saveButtonUpdateOrCreate(),
         css_width: "100%",
       }
-    ), 
+    ),
     new MenuButtonComponent(
       {
         value: "My Drawings",
@@ -724,7 +721,7 @@ class RightMenuComponent extends MenuComponent {
         on_click: async () => await bodyComponent.listDrawingsComponent.toggle(),
         css_width: "100%",
       }
-    ), 
+    ),
   ]
 }
 
