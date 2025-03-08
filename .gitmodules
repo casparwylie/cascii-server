@@ -1,4 +1,4 @@
-[submodule "src/frontend/ascii-core"]
-	path = src/frontend/ascii-core
-	url = git@github.com:casparwylie/ascii-core.git
+[submodule "src/frontend/cascii-core"]
+	path = src/frontend/cascii-core
+	url = git@github.com:casparwylie/cascii-core.git
   branch = main
