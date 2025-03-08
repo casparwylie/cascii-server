@@ -3,9 +3,6 @@ var drawingManager;
 var routeManager;
 
 
-const SHORT_URL_HOST = "b2a.am"
-
-
 async function postRequest(url, data) {
   bodyComponent.informerComponent.loading();
   let response = await fetch(url,
