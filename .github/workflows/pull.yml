@@ -12,6 +12,9 @@ jobs:
       -
         name: Checking out repo
         uses: actions/checkout@v2
+        with:
+          submodules: 'true'
+          token: ${{ secrets.PAT }}
       -
         name: Tests
         run: ./tests.sh

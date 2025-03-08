@@ -15,6 +15,9 @@ jobs:
       -
         name: Checking out repo
         uses: actions/checkout@v2
+        with:
+          submodules: 'true'
+          token: ${{ secrets.PAT }}
       -
         name: Run tests
         run: ./tests.sh
@@ -26,6 +29,9 @@ jobs:
       -
         name: Checking out repo
         uses: actions/checkout@v2
+        with:
+          submodules: 'true'
+          token: ${{ secrets.PAT }}
       -
         name: Build
         run: docker build -t "${IMAGE_NAME}" --target server .
@@ -39,9 +45,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      -
-        name: Checking out repo
-        uses: actions/checkout@v2
       -
         name: Set production environment variables
         run: |
