@@ -2,6 +2,10 @@ name: prod
 
 on:
   push:
+    paths:
+      - src/**
+      - docker-compose.prod.yaml
+      - Dockerfile
     branches:
       - main
 
