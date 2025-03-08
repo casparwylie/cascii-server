@@ -46,6 +46,9 @@ jobs:
     needs: build
     steps:
       -
+        name: Checking out repo
+        uses: actions/checkout@v2
+      -
         name: Set production environment variables
         run: |
             touch .env
@@ -60,7 +63,7 @@ jobs:
           host: ${{ secrets.PRODUCTION_HOST }}
           username: ${{ secrets.PRODUCTION_USER }}
           key: ${{ secrets.PRODUCTION_KEY }}
-          source: ".env"
+          source: ".env, docker-compose.prod.yaml"
           target: "~"
       - name: Run production container
         uses: appleboy/ssh-action@master
@@ -72,4 +75,4 @@ jobs:
           script: |
                   echo "${{ secrets.PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
                   docker image pull "${IMAGE_NAME}"
-                  docker run -p 8000:8000 --env-file .env "${IMAGE_NAME}"
+                  IMAGE_NAME="${IMAGE_NAME}" docker compose -f docker-compose.prod.yaml up -d
