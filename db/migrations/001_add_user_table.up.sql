@@ -1,0 +1,6 @@
+CREATE TABLE users (
+    id MEDIUMINT NOT NULL AUTO_INCREMENT,
+    email VARCHAR(255),
+    password VARCHAR(80),
+    PRIMARY KEY (id)
+);

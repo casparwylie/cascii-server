@@ -1,0 +1,17 @@
+name: pull-request
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checking out repo
+        uses: actions/checkout@v2
+      -
+        name: Tests
+        run: ./tests.sh

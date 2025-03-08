@@ -1,0 +1,72 @@
+name: prod
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  IMAGE_NAME: "ghcr.io/${{ github.repository }}/${{ github.sha }}:latest"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checking out repo
+        uses: actions/checkout@v2
+      -
+        name: Run tests
+        run: ./tests.sh
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      -
+        name: Checking out repo
+        uses: actions/checkout@v2
+      -
+        name: Build
+        run: docker build -t "${IMAGE_NAME}" --target server .
+      -
+        name: Push
+        run: |
+             echo "${{ secrets.PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+             docker image push "${IMAGE_NAME}"
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      -
+        name: Checking out repo
+        uses: actions/checkout@v2
+      -
+        name: Set production environment variables
+        run: |
+            touch .env
+            echo "DB_NAME=${{ secrets.DB_NAME}}" >> .env
+            echo "DB_USER=${{ secrets.DB_USER}}" >> .env
+            echo "DB_PASS=${{ secrets.DB_PASS}}" >> .env
+            echo "DB_PORT=${{ secrets.DB_PORT}}" >> .env
+            echo "DB_HOST=${{ secrets.DB_HOST}}" >> .env
+      - name: Deploy production compose
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_KEY }}
+          source: ".env"
+          target: "~"
+      - name: Run production container
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_KEY }}
+          envs: IMAGE_NAME
+          script: |
+                  echo "${{ secrets.PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+                  docker image pull "${IMAGE_NAME}"
+                  docker run -p 8000:8000 --env-file .env "${IMAGE_NAME}"

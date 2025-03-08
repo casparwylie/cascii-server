@@ -1,26 +1,5 @@
 <script>
 /*
-
-*** TODO ***
-
-FE  -
-  - various todos
-  - intro / why ascii
-  - manual page. shortcuts, etc.
-  - BIG TEST
-  - merge main
-  - consider intergration testing
-
-BE -
-  - save, share, manage, user, login google + github,  CRUD
-  - guest auto save (refresh keeps)
-  - import / shorturl
-  - plain text request / curl
-
-BIG IDEAS:
-   - ML for auto parsing imported diagrams
-   - Testing - full web driver / record intergration testing
-
 IMPROVEMENTS (arguably features):
   - diamond resize bit odd with other layers.
   - joiner layer with arrow heads won't always show - zindex.
@@ -31,6 +10,7 @@ IMPROVEMENTS (arguably features):
 
 var layerManager;
 var eventManager;
+var externalHookManager;
 var areaSelectManager;
 var modeMaster;
 var charManager;
@@ -108,11 +88,11 @@ class Theme {
     bodyBgColor: Theme.Color.none,
     bodyFont: "monospace",
 
-    menuButtonBgColor: Theme.Color.black,
-    menuButtonFgColor: Theme.Color.white,
-    menuButtonBorderColor: Theme.Color.black,
-    menuButtonSelectedBgColor: Theme.Color.blue,
-    menuButtonClickBgColor: Theme.Color.blue,
+    buttonBgColor: Theme.Color.black,
+    buttonFgColor: Theme.Color.white,
+    buttonBorderColor: Theme.Color.black,
+    buttonSelectedBgColor: Theme.Color.blue,
+    buttonClickBgColor: Theme.Color.blue,
 
     canvasBgColor: Theme.Color.none,
 
@@ -128,10 +108,16 @@ class Theme {
     areaSelectionBgColor: Theme.Color.blue,
 
     informerDefaultBgColor: Theme.Color.blue,
-    informerGoodBgColor: Theme.Color.lightGreen,
-    informerBadBgColor: Theme.Color.lightRed,
+    informerGoodBgColor: Theme.Color.green,
+    informerBadBgColor: Theme.Color.red,
+
+    informerDefaultFgColor: Theme.Color.black,
+    informerGoodFgColor: Theme.Color.black,
+    informerBadFgColor: Theme.Color.black,
 
     canvasFont: "monospace",
+
+    warningRed: Theme.Color.red,
   }
 
   constructor(config) {
@@ -150,9 +136,9 @@ class ThemeManager {
       {
         bodyBgColor: Theme.Color.black,
         bodyFgColor: Theme.Color.white,
-        menuButtonBgColor: Theme.Color.black,
-        menuButtonFgColor: Theme.Color.white,
-        menuButtonBorderColor: Theme.Color.grey,
+        buttonBgColor: Theme.Color.black,
+        buttonFgColor: Theme.Color.white,
+        buttonBorderColor: Theme.Color.grey,
 
         pixelCursorColor: Theme.Color.white,
         pixelNormalFgColor: Theme.Color.white,
@@ -161,18 +147,18 @@ class ThemeManager {
         pixelJointBgColor: Theme.Color.green,
         areaSelectionBgColor: Theme.Color.darkestBlue,
 
-        informerDefaultBgColor: Theme.Color.blue,
-        informerGoodBgColor: Theme.Color.green,
-        informerBadBgColor: Theme.Color.red,
+        //informerDefaultBgColor: Theme.Color.blue,
+        //informerGoodBgColor: Theme.Color.green,
+        //informerBadBgColor: Theme.Color.red,
       }
     ),
     lightTheme: new Theme(
       {
         bodyBgColor: Theme.Color.white,
         bodyFgColor: Theme.Color.black,
-        menuButtonBgColor: Theme.Color.white,
-        menuButtonFgColor: Theme.Color.black,
-        menuButtonBorderColor: Theme.Color.black,
+        buttonBgColor: Theme.Color.white,
+        buttonFgColor: Theme.Color.black,
+        buttonBorderColor: Theme.Color.black,
 
         pixelCursorColor: Theme.Color.black,
         pixelNormalFgColor: Theme.Color.black,
@@ -180,9 +166,9 @@ class ThemeManager {
         pixelJointNearBgColor: Theme.Color.pink,
         pixelJointBgColor: Theme.Color.green,
 
-        informerDefaultBgColor: Theme.Color.blue,
-        informerGoodBgColor: Theme.Color.lightGreen,
-        informerBadBgColor: Theme.Color.lightRed,
+        //informerDefaultBgColor: Theme.Color.blue,
+        //informerGoodBgColor: Theme.Color.lightGreen,
+        //informerBadBgColor: Theme.Color.lightRed,
 
         areaSelectionBgColor: Theme.Color.lightestBlue,
       }
@@ -191,10 +177,10 @@ class ThemeManager {
       {
         bodyBgColor: Theme.Color.black,
         bodyFgColor: Theme.Color.green,
-        menuButtonBgColor: Theme.Color.black,
-        menuButtonFgColor: Theme.Color.green,
-        menuButtonBorderColor: Theme.Color.green,
-        menuButtonSelectedBgColor: Theme.Color.darkRed,
+        buttonBgColor: Theme.Color.black,
+        buttonFgColor: Theme.Color.green,
+        buttonBorderColor: Theme.Color.green,
+        buttonSelectedBgColor: Theme.Color.darkRed,
 
         pixelSelectedFgColor: Theme.Color.lightGreen,
         pixelResizeBgColor: Theme.Color.lightGreen,
@@ -203,9 +189,9 @@ class ThemeManager {
         pixelJointNearBgColor: Theme.Color.lightGreen,
         pixelJointBgColor: Theme.Color.red,
 
-        informerDefaultBgColor: Theme.Color.blue,
-        informerGoodBgColor: Theme.Color.lightGreen,
-        informerBadBgColor: Theme.Color.red,
+        //informerDefaultBgColor: Theme.Color.blue,
+        //informerGoodBgColor: Theme.Color.darkGreen,
+        //informerBadBgColor: Theme.Color.red,
 
         areaSelectionBgColor: Theme.Color.darkRed,
       }
@@ -294,6 +280,10 @@ class ModeMaster {
     return modes.map((mode) => this._modes.includes(mode)).every(Boolean);
   }
 
+  hasAny() {
+    return this._modes.length > 0;
+  }
+
   hasOr(...modes) {
     return modes.map((mode) => this._modes.includes(mode)).some(Boolean);
   }
@@ -332,6 +322,25 @@ class ModeMaster {
 ////////////////
 //// EVENTS ////
 ////////////////
+class BaseExternalHookManager {
+  /*
+    This class should be overridden by optional dependencies
+    allowing upstream functionality for specific hooks coming from this core app.
+
+    E.g It is used to trigger server hooks for the server layer which,
+    by design, is optionally attached.
+
+    I want this file to open as an index.html and work out-of-the box,
+    with 0 dependencies on a server, packaging, etc.
+  */
+
+  async getShortKeyUrl() {
+    // Without a server, we return an empty short key. 
+    return "";
+  }
+
+}
+
 
 class EventDef {
   constructor(modeCondition, modeUpdate, callback=()=>{}) {
@@ -365,7 +374,7 @@ class EventManager {
                 [], (event) => layerManager.selectedArrowKeyDownEvent(event.key)),
           ],
           [["Shift"]]: [
-            new EventDef([],
+            new EventDef([modeMaster.hasAny],
                 [modeMaster.add, "shift"])
           ],
           [keyGroup("Backspace", "Delete")]: [
@@ -381,7 +390,7 @@ class EventManager {
                 [], TextLayer.keyDownEvent),
           ],
           [keyGroup("Control")]: [
-            new EventDef([],
+            new EventDef([modeMaster.hasAny],
                 [modeMaster.add, "ctrl"]),
           ],
           [keyGroup("Z", "z")]: [
@@ -424,7 +433,9 @@ class EventManager {
         ],
         paste: [
           new EventDef([modeMaster.has, "writing", "text"],
-          [], (event) => layerManager.pasteToTextLayerEvent(event))
+          [], (event) => layerManager.pasteToTextLayerEvent(event)),
+          new EventDef([],
+          [], (event) => layerManager.pasteAsTextLayerEvent(event))
         ],
         mouseup: [
           new EventDef([modeMaster.has, "drawing"],
@@ -856,7 +867,7 @@ class LayerManager {
   }
 
   import(encodedData) {
-    this.empty();
+    this.refresh(() => this.empty());
     let data = JSON.parse(encodedData);
     this.layers = this.decodeLayers(data.layers);
     this.groupManager.layerGroups = data.groups;
@@ -1414,14 +1425,14 @@ class LayerManager {
 
   groupSelectedLayersEvent(event) {
     this.groupManager.groupLayers(this.getSelectedLayers());
-    bodyComponent.informer.report("Successfully grouped", "good");
+    bodyComponent.informerComponent.report("Successfully grouped", "good");
   }
 
   ungroupSelectedLayersEvent(event) {
     this.groupManager.ungroupLayers(this.getSelectedLayers());
     layerManager.unselectAll();
     modeMaster.reset("select");
-    bodyComponent.informer.report("Successfully ungrouped", "good");
+    bodyComponent.informerComponent.report("Successfully ungrouped", "good");
   }
 
   redrawLinesEvent(direction) {
@@ -1447,7 +1458,7 @@ class LayerManager {
     let activePixel = canvas.getPixelById(event.target.id);
     let layer = this.getLayerByPixelId(activePixel.id());
     if (layer && !layer.is("free")) {
-      bodyComponent.informer.report("Can only erase free drawings!", "bad");
+      bodyComponent.informerComponent.report("Can only erase free drawings!", "bad");
       return;
     }
     if (layer) this.refresh(() => layer.erasePixel(activePixel.id()));
@@ -1503,8 +1514,27 @@ class LayerManager {
     this.refresh(
       () => this.editingTextLayer.commit(
         () => this.editingTextLayer.paste(text)
+        // TODO: Show error when failing to copy
       )
     );
+  }
+
+  pasteAsTextLayerEvent(event) {
+    event.stopPropagation();
+    event.preventDefault();
+    // TODO: Consider unifying clipboard reading with method above
+    modeMaster.reset("select");
+    let clipboardData = event.clipboardData || window.clipboardData;
+    let text = clipboardData.getData('Text').substring(0, 1000);
+    let textLayer = new TextLayer(canvas.getPixelByRowCol(30, 30).id());
+    textLayer.contents = text.split("");
+    layerManager.add(textLayer);
+    this.refresh(() => {
+      if (textLayer.commit(() => textLayer.drawLayer())) {
+        textLayer.select();
+      } // TODO: Show error when failing to copy
+    });
+
   }
 }
 
@@ -3016,7 +3046,7 @@ class FreeLayer extends Layer {
 
   characterWarning(value) {
     if (this.warningUnicodeChars.includes(value) && charManager.charsetForm != "unicode") {
-      bodyComponent.informer.report("Warning: using unicode character in non-unicode mode");
+      bodyComponent.informerComponent.report("Warning: using unicode character in non-unicode mode");
     }
   }
 
@@ -3449,7 +3479,7 @@ class TableLayer extends SquareBoundLayer {
       if (newTblCols == 0 || newTblRows == 0) return;
       // ...or if the size limit is hit...
       if (newTblRows >= this.tblSizeLimit || newTblCols >= this.tblSizeLimit) {
-        bodyComponent.informer.report("Table getting too big", "bad");
+        bodyComponent.informerComponent.report("Table getting too big", "bad");
         return;
       };
     }
@@ -3723,11 +3753,14 @@ class TableLayer extends SquareBoundLayer {
 class Component {
   _MagicMethodEventPrefix = "on";
   _MagicPropCssPrefix = "css";
+  _MagicPropCustomPrefix = "prop";
 
   value = "";
-  type = "";
   children = [];
   type = "div";
+
+  // Use this if you don't want a component's children to be traversed for theme setting.
+  skipChildrenTheme = false; 
 
   constructor(props) {
     this.visible = true;
@@ -3740,7 +3773,6 @@ class Component {
 
   registerMagicProps() {
     var obj = this;
-
     // Get all properties
     let props = Object.keys(obj);
 
@@ -3753,13 +3785,26 @@ class Component {
     props = props.concat(Array.from(allMethods.values()));
 
     // Assign magic functionality to each magic property type
-    for (let prop of props.filter(prop => prop.includes("_"))) {
-      let [type, value] = prop.split("_");
-      switch(type) {
+    let mainProps = props.filter(prop => prop.includes("_"))
+
+    // TODO: Consider if this priority logic is worth while.
+    // If there is an intermediate class, Javascript constructors initialize
+    // class properties of that class after the base constructor is called :/
+    // This overrides properties being reasonably sent from a child class. 
+    // Here, we hack together a 'feature' where we can capitalize the derived property's
+    // first letter so it takes priority.
+    let highPriorProps = mainProps.filter(prop => /^[A-Z]*$/.test(prop.substring(0, 1)));
+    let lowPriorProps = mainProps.filter(prop => /^[a-z]*$/.test(prop.substring(0, 1)));
+
+    for (let prop of lowPriorProps.concat(highPriorProps)) {
+      let [type, name] = prop.split("_");
+      switch(type.toLowerCase()) {
+        case this._MagicPropCustomPrefix:
+          this.element.setAttribute(name, this[prop]);
         case this._MagicPropCssPrefix:
-          this.css(value, this[prop]);
+          this.css(name, this[prop]);
         case this._MagicMethodEventPrefix:
-          this.element.addEventListener(value.toLowerCase(), () => this[prop]());
+          this.element.addEventListener(name.toLowerCase(), () => this[prop]());
         break;
       }
     }
@@ -3767,15 +3812,19 @@ class Component {
 
   renderChildren() {
     this.children = this.defineChildren();
-    for (let child of this.children) child.render(this);
+    for (let child of this.children) {
+      child.render(this);
+    }
   }
 
   defineChildren() { return this.children; }
 
-  defineTheme() { };
+  defineTheme() {}
 
   renderTheme() {
+    if (this.skipTheme) return;
     this.defineTheme();
+    if (this.skipChildrenTheme) return;
     this.children.forEach(child => child.renderTheme());
   }
 
@@ -3786,13 +3835,14 @@ class Component {
 
   assignParent(parent) {
     this.parent = parent;
+    this.parent[this.accessibleBy] = this;
     this.parent.element.appendChild(this.element);
   }
 
   render(parent) {
     this.create();
     this.setId();
-    this.setValue(this.value);
+    this.setValue(this.value); // TODO: this.value should be called initialValue or use prop_value
     this.registerMagicProps();
     this.renderChildren();
     this.assignParent(parent);
@@ -3803,10 +3853,12 @@ class Component {
   addChild(child) {
     this.children.push(child);
     child.render(this);
-
   }
 
   css(style, value) {
+    // Check for priority styles
+    if (this["Css_" + style] != undefined) value = this["Css_" + style];
+
     let valueFromTheme = themeManager.getTheme()[value];
     this.element.style[style] = valueFromTheme? valueFromTheme: value;
   }
@@ -3818,11 +3870,12 @@ class Component {
 
   setValue(value) {
     this.value = value;
+    this.element.value = value;
     this.element.innerHTML = value;
   }
 
   getValue() {
-    return this.value;
+    return this.element.value;
   }
 
   show() {
@@ -3991,8 +4044,11 @@ class Pixel extends Component {
 }
 
 class CanvasComponent extends Component {
+  // Skip the theme to avoid all pixels being traversed. 
+  skipChildrenTheme = true;
+  skipTheme = false;
 
-  type = "div";
+  accessibleBy = "canvasComponent";
 
   rowCount = 65;
   colCount = 225;
@@ -4000,7 +4056,6 @@ class CanvasComponent extends Component {
   css_userSelect = "none";
   css_position   = "absolute";
   css_zIindex    = "0";
-  css_borderBottom     = "1px solid grey";
   pixelWidthDivider = 0.5;
 
   constructor() {
@@ -4061,9 +4116,8 @@ class CanvasComponent extends Component {
     return [maxCol, minCol, maxRow, minRow];
   }
 
-  exportToClipboard() {
+  async exportToClipboard() {
     layerManager.switchModeCallback();
-
     // Scrape text from canvas with linebreaks
     var text = "";
     let [maxCol, minCol, maxRow, minRow] = this.getCroppedRowsCols();
@@ -4079,19 +4133,24 @@ class CanvasComponent extends Component {
       text += `${rowText}\n`;
     }
 
+    let shortKey = await externalHookManager.getShortKeyUrl();
+    if (shortKey.length > 0)  {
+        text += `\n\nEdit/view: ${shortKey}\n`;
+    }
+
     // This is a slight hack to preserve styles if possible.
     // It fills scraped export text into a dump div styled nicely,
     // then copies it literally from there.
     // This allows same-browser exports to preserve styling.
-    bodyComponent.canvasDump.setValue(text);
+    bodyComponent.canvasDumpComponent.setValue(text);
     var selection = window.getSelection()
     var range = document.createRange()
-    range.selectNodeContents(bodyComponent.canvasDump.element)
+    range.selectNodeContents(bodyComponent.canvasDumpComponent.element)
     selection.removeAllRanges()
     selection.addRange(range)
     document.execCommand('copy')
     window.getSelection().removeAllRanges()
-    bodyComponent.informer.report("Successfully copied work to clipboard!", "good");
+    bodyComponent.informerComponent.report("Successfully copied work to clipboard!", "good");
   }
 
   defineTheme() {
@@ -4138,15 +4197,27 @@ class PopupComponent extends Component {
   css_userSelect      = "none";
 
   isPopup = true;
+  disableModes = false;
 
-  toggle() {
+  show() {
     bodyComponent.hidePopups();
-    super.toggle();
+    if (this.disableModes) modeMaster.reset();
+    super.show();
+  }
+
+  renderCallback() {
+    this.hide();
+  }
+
+  defineTheme() {
+    this.css("background", "bodyBgColor");
   }
 }
 
 
 class HelpComponent extends PopupComponent {
+  accessibleBy = "helpComponent";
+
   css_width           = "500px";
   css_height          = "500px";
   css_marginLeft      = "calc(50vw - 250px)";
@@ -4156,7 +4227,7 @@ class HelpComponent extends PopupComponent {
 <div style='text-align: center;'><h2>Welcome</h2>
 
 <p>
-This is the first well-equipped ASCII diagram builder available on the internet.
+This is one of the few well-equipped ASCII diagram builders freely available on the internet.
 It stresses portability, simplicity, and immediateness. ASCII diagrams are
 the best balance between pen to paper and advanced graphical builders, while also allowing
 users to present visual information in places that can
@@ -4170,17 +4241,37 @@ By using text, you avoid the need for file formats, attaching documents and over
  Unicode is prettier but less reliable. Depending on where it's used,
  it could display in unexpected ways. Here, both modes try their best
  to use the most appropriate characters, but each mode does not promise
- absolute ASCII or Unicode.
+ absolute ASCII or Unicode. You can change mode in Settings.
+ <h4>How do I export my drawing?</h4>
+ Simply select Export on the top menu, and your drawing
+ will be copied to your clipboard. A short link will be included
+ so that you / others can edit the drawing later. It's recommended
+ you keep this short link to avoid loosing the ability to find / edit it later.
+ Exported drawings are immutable; editing via a short link is a copy of the original.
+ <br><br>
+ <b>Remember, the view in which you paste the drawing must use a fixed-width font,
+ and have a width greater than what you've drawn or not wrap text.
+ Otherwise you'll see a mess.</b>
+
+ <h4>Why sign up?</h4>
+ Only sign up if you care about managing and tracking your drawings.
+ For convenience, your active drawing is saved to the browser, but 
+ to save multiple reliably and cross-device, an account is recommended.
+ Passwords are Bcrypt-10 encrypted.
+ <h4>Account Management</h4>
+ If you wish to delete your account, recover a lost account, or anything else,
+ please get in touch at <b>casparwylie@gmail.com</b>, using the email you 
+ originally signed up with.
  <h4>How do I contribute?</h4>
- ...
+ Feel free to contribute on <a href="github.com/casparwylie/ascii">GitHub</a>.
  <h4>Feature requests?</h4>
- ...
+ Please use the Issue Tracker on <a href="github.com/casparwylie/ascii">GitHub</a>.
  <h4></h4>
 <h2>Usage</h2>
 <h2>Shortcuts</h2>
 </div>
 <span style='white-space: pre-wrap'>
-<b>g</b>                   Group
+<b>ctrl-g</b>              Group
 <b>ctrl-c</b>              Copy layer
 <b>ctrl-z</b>              Undo
 <b>ctrl-shift-z</b>        Redo
@@ -4192,21 +4283,21 @@ By using text, you avoid the need for file formats, attaching documents and over
 </span>
   `;
 
-  defineTheme() {
-    this.css("background", "bodyBgColor");
-  }
-
   defineChildren() {
     return [];
   }
 
-  renderCallback() {
-    this.hide();
+  showIfFirstVisit() {
+    if (!localStorage.getItem("visited")) {
+      this.show();
+    }
+    localStorage.setItem("visited", true);
   }
-
 }
 
 class SettingsComponent extends PopupComponent {
+  accessibleBy = "settingsComponent";
+
   css_width           = "300px";
   css_height          = "250px";
   css_marginLeft      = "calc(50vw - 150px)";
@@ -4267,10 +4358,6 @@ class SettingsComponent extends PopupComponent {
     }
   }
 
-  defineTheme() {
-    this.css("background", "bodyBgColor");
-  }
-
   defineChildren() {
     return [
       new Component({
@@ -4300,11 +4387,6 @@ class SettingsComponent extends PopupComponent {
       }),
     ]
   }
-
-  renderCallback() {
-    this.hide();
-  }
-
 }
 
 
@@ -4320,20 +4402,20 @@ class ButtonComponent extends Component {
   css_userSelect       = "none";
 
   defineTheme() {
-    this.css("backgroundColor", "menuButtonBgColor");
-    this.css("borderColor", "menuButtonBorderColor");
-    this.css("color", "menuButtonFgColor");
+    this.css("backgroundColor", "buttonBgColor");
+    this.css("borderColor", "buttonBorderColor");
+    this.css("color", "buttonFgColor");
     this.selected? this.select(): this.unselect();
   }
 
   unselect() {
     this.selected = false;
-    this.css("backgroundColor", "menuButtonBgColor");
+    this.css("backgroundColor", "buttonBgColor");
   }
 
   select() {
     this.selected = true;
-    this.css("backgroundColor", "menuButtonSelectedBgColor");
+    this.css("backgroundColor", "buttonSelectedBgColor");
   }
 
   renderCallback() {
@@ -4341,20 +4423,23 @@ class ButtonComponent extends Component {
   }
 
   on_mouseDown() {
-    this.css("backgroundColor", "menuButtonClickBgColor");
+    this.css("backgroundColor", "buttonClickBgColor");
   }
 
   on_mouseUp() {
-    this.css("backgroundColor", "menuButtonBgColor");
+    this.css("backgroundColor", "buttonBgColor");
   }
 }
 
 
 class MenuButtonComponent extends ButtonComponent {
-
-  css_marginTop        = "10px";
   css_border           = "1px solid #212121";
   css_boxShadow        = "0px 0px 20px #403f3f";
+  css_marginTop        = "10px";
+}
+
+
+class ModeMenuButtonComponent extends MenuButtonComponent {
 
   constructor (icon, name, showCondition, setModes, activeModes, callback=()=>{}) {
     super();
@@ -4405,7 +4490,7 @@ class MenuButtonComponent extends ButtonComponent {
   }
 }
 
-class MenuButtonLeftComponent extends MenuButtonComponent {
+class MenuButtonLeftComponent extends ModeMenuButtonComponent {
   css_width = "100%";
 }
 
@@ -4416,12 +4501,14 @@ class MenuComponent extends Component {
     this.buttons.forEach(button => button.unselect());
   }
 
-  refresh() {
-    this.buttons.forEach(button => button.refresh());
-  }
-
   defineChildren() {
     return this.buttons;
+  }
+}
+
+class ModeMenuComponent extends MenuComponent {
+  refresh() {
+    this.buttons.forEach(button => button.refresh());
   }
 
   renderCallback() {
@@ -4431,7 +4518,7 @@ class MenuComponent extends Component {
 }
 
 
-class MainMenuComponent extends MenuComponent {
+class MainMenuComponent extends ModeMenuComponent {
   css_top            = "0";
   css_left           = "0";
   css_right          = "0";
@@ -4446,44 +4533,44 @@ class MainMenuComponent extends MenuComponent {
   css_height         = "7vh";
 
   buttons = [
-    new MenuButtonComponent("➤", "Select",
+    new ModeMenuButtonComponent("➤", "Select",
       [], [modeMaster.reset, "select"], [modeMaster.hasOr, "selected", "select"], () => layerManager.switchModeCallback()),
-    new MenuButtonComponent("◻", "Square",
+    new ModeMenuButtonComponent("◻", "Square",
       [], [modeMaster.reset, "draw", "square"], [modeMaster.isDrawyMode, "square"], () => layerManager.switchModeCallback()),
-    new MenuButtonComponent("◯", "Circle",
+    new ModeMenuButtonComponent("◯", "Circle",
       [], [modeMaster.reset, "draw", "circle"], [modeMaster.isDrawyMode, "circle"], () => layerManager.switchModeCallback()),
-    new MenuButtonComponent("t",  "Text",
+    new ModeMenuButtonComponent("t",  "Text",
       [], [modeMaster.reset, "draw", "text"], [modeMaster.isDrawyMode, "text"], () => layerManager.switchModeCallback()),
-    new MenuButtonComponent("/", " Line",
+    new ModeMenuButtonComponent("/", " Line",
       [], [modeMaster.reset, "draw", "line", "free-line"], [modeMaster.isDrawyMode, "free-line"], () => layerManager.switchModeCallback()),
-    new MenuButtonComponent("_|", "Step",
+    new ModeMenuButtonComponent("_|", "Step",
       [], [modeMaster.reset, "draw", "line", "step-line"], [modeMaster.isDrawyMode, "step-line"], () => layerManager.switchModeCallback()),
-    new MenuButtonComponent("_|‾", "Switch",
+    new ModeMenuButtonComponent("_|‾", "Switch",
       [], [modeMaster.reset, "draw", "line", "switch-line"], [modeMaster.isDrawyMode, "switch-line"], () => layerManager.switchModeCallback()),
-    new MenuButtonComponent("◇", "Diamond",
+    new ModeMenuButtonComponent("◇", "Diamond",
       [], [modeMaster.reset, "draw", "diamond"], [modeMaster.isDrawyMode, "diamond"], () => layerManager.switchModeCallback()),
-    new MenuButtonComponent("᎒᎒᎒", "Table",
+    new ModeMenuButtonComponent("᎒᎒᎒", "Table",
       [], [modeMaster.reset, "draw", "table"], [modeMaster.isDrawyMode, "table"], () => layerManager.switchModeCallback()),
-    new MenuButtonComponent("∿", "Free",
+    new ModeMenuButtonComponent("∿", "Free",
       [], [modeMaster.reset, "draw", "free"], [modeMaster.isDrawyMode, "free"], () => FreeLayer.startFreeDraw()),
-    new MenuButtonComponent("⌫", "Erase",
+    new ModeMenuButtonComponent("⌫", "Erase",
       [], [modeMaster.reset, "erase", "ebutton"], [modeMaster.hasOr, "erasing", "erase"], () => layerManager.switchModeCallback()),
-    new MenuButtonComponent("↺", "Undo",
+    new ModeMenuButtonComponent("↺", "Undo",
       [], [], [], (event) => layerManager.undoEvent(event)),
-    new MenuButtonComponent("↻", "Redo",
+    new ModeMenuButtonComponent("↻", "Redo",
       [], [], [], (event) => layerManager.redoEvent(event)),
-    new MenuButtonComponent("x", "Restart",
+    new ModeMenuButtonComponent("x", "Restart",
       [], [], [], () => layerManager.refresh(() => layerManager.empty())),
-    new MenuButtonComponent("->", "Export",
+    new ModeMenuButtonComponent("->", "<b>Export</b>",
       [], [], [], () => canvas.exportToClipboard()),
-    new MenuButtonComponent("⚙", "Settings",
-      [], [], [], () => bodyComponent.settings.toggle()),
-    new MenuButtonComponent("?", "Help",
-      [], [], [], () => bodyComponent.help.toggle()),
+    new ModeMenuButtonComponent("⚙", "<b>Settings</b>",
+      [], [], [], () => bodyComponent.settingsComponent.toggle()),
+    new ModeMenuButtonComponent("?", "<b>Help</b>",
+      [], [], [], () => bodyComponent.helpComponent.toggle()),
   ]
 }
 
-class LeftMenuComponent extends MenuComponent {
+class LeftMenuComponent extends ModeMenuComponent {
   css_height    = "100vh";
   css_width     = "130px";
   css_float     = "left";
@@ -4564,6 +4651,8 @@ class LeftMenuComponent extends MenuComponent {
 
 
 class CanvasDumpComponent extends Component {
+  accessibleBy = "canvasDumpComponent";
+
   // We never display this, but export uses this
   // to output before copying to preserve styling.
   // If a user pastes an export in the same browser,
@@ -4574,51 +4663,78 @@ class CanvasDumpComponent extends Component {
   css_color           = "black";
   css_whiteSpace      = "pre-wrap";
   // Hide far away (body overflow is hidden)
-  css_marginLeft      = "500vw";
+  css_position         = "absolute";
+  css_marginLeft       = "500vw";
 }
 
 
 class InformerComponent extends Component {
+  accessibleBy = "informerComponent"
+
   css_width            = "30%";
   css_marginLeft       = "35%";
   css_position         = "absolute";
-  css_marginTop        = "94vh";
+  css_marginTop        = "80vh";
   css_borderRadius     = "10px";
   css_boxShadow        = "0px 0px 20px grey";
-  css_fontSize         = "13px";
+  css_fontSize         = "15px";
   css_padding          = "5px";
   css_textAlign        = "center";
+  css_textWeight       = "bold";
   css_zIndex           = "100";
-
-  moodCharComponent = new Component({css_fontSize: "20px", type: "span", css_verticalAlign: "middle"});
-  messageComponent = new Component({css_marginLeft: "10px", type: "span", css_verticalAlign: "middle"});
 
   defineTheme() {
     this.css("color", "bodyFgColor");
   }
 
   defineChildren() {
-    return [this.moodCharComponent, this.messageComponent];
+    return [
+      new Component({
+        accessibleBy: "moodCharComponent",
+        css_fontSize: "25px",
+        type: "span",
+        css_verticalAlign: "middle",
+      }),
+      new Component({
+        accessibleBy: "messageComponent",
+        css_marginLeft: "10px",
+        type: "span",
+        css_verticalAlign: "middle",
+      }),
+    ]
   }
 
-  report(message, mood) {
+  report(message, mood, time=null) {
+    if (time == null) time = message.length * 150;
+    if (time == -1) time = 100000000;
     let moodChar = "";
     switch (mood) {
       case "good":
         this.css("backgroundColor", "informerGoodBgColor");
+        this.css("color", "informerGoodFgColor");
         moodChar = "✓";
       break;
       case "bad":
         this.css("backgroundColor", "informerBadBgColor");
+        this.css("color", "informerBadFgColor");
         moodChar = "✕";
       break;
       default:
         this.css("backgroundColor", "informerDefaultBgColor");
+        this.css("color", "informerDefaultFgColor");
     }
     this.messageComponent.setValue(message);
     this.moodCharComponent.setValue(moodChar);
     this.show();
-    setTimeout(() => this.hide(), message.length * 150);
+    setTimeout(() => this.hide(), time);
+  }
+
+  loading() {
+    this.report("Loading...", "", -1);
+  }
+
+  loadingFinish() {
+    this.hide();
   }
 
   renderCallback() {
@@ -4637,21 +4753,14 @@ class Body extends Component {
   }
 
   defineChildren() {
-    this.informer   = new InformerComponent();
-    this.settings   = new SettingsComponent();
-    this.help       = new HelpComponent();
-    this.mainMenu   = new MainMenuComponent();
-    this.leftMenu   = new LeftMenuComponent();
-    this.canvas     = new CanvasComponent();
-    this.canvasDump = new CanvasDumpComponent();
     return [
-      this.informer,
-      this.settings,
-      this.help,
-      this.mainMenu,
-      this.leftMenu,
-      this.canvas,
-      this.canvasDump,
+      new InformerComponent(),
+      new SettingsComponent(),
+      new HelpComponent(),
+      new MainMenuComponent(),
+      new LeftMenuComponent(),
+      new CanvasComponent(),
+      new CanvasDumpComponent(),
     ];
   }
 
@@ -4668,24 +4777,30 @@ class Body extends Component {
 
 
 function main() {
-  layerManager       = new LayerManager();
-  modeMaster         = new ModeMaster();
-  areaSelectManager  = new AreaSelectManager();
-  eventManager       = new EventManager();
-  charManager        = new CharManager();
-  themeManager       = new ThemeManager();
+  layerManager         = new LayerManager();
+  modeMaster           = new ModeMaster();
+  areaSelectManager    = new AreaSelectManager();
+  eventManager         = new EventManager();
+  externalHookManager  = new BaseExternalHookManager();
+  charManager          = new CharManager();
+  themeManager         = new ThemeManager();
 
   bodyComponent = new Body();
   bodyComponent.render();
 
 
-  canvas = bodyComponent.canvas;
+  canvas = bodyComponent.canvasComponent;
   eventManager.assignAll(
     {window: window, document: document, canvas: canvas.element}
   );
 
   layerManager.importFromLocalStorage();
+
+  bodyComponent.helpComponent.showIfFirstVisit();
 }
 
 main(); // :)
 </script>
+
+<!-- By design, this can happily 404 and run without a backend -->
+<script src="/static/serverLink.js"></script>
