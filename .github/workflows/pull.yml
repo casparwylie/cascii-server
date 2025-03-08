@@ -13,5 +13,5 @@ jobs:
         name: Checking out repo
         uses: actions/checkout@v2
       -
-        name: Run tests
+        name: Tests
         run: ./tests.sh
