@@ -1,0 +1,3 @@
+[submodule "src/frontend/ascii-core"]
+	path = src/frontend/ascii-core
+	url = git@github.com:casparwylie/ascii-core.git
