@@ -61,11 +61,6 @@ function handleResponse(response, msg="", silentErr=false) {
   return true;
 }
 
-function getCookie(name) {
-  // Cheers https://stackoverflow.com/a/25490531/27835424
-  return document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)')?.pop() || ''
-}
-
 class ServeExternalHookManager extends BaseExternalHookManager {
 
   async getShortKeyUrl() {
