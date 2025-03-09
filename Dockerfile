@@ -8,7 +8,6 @@ RUN go mod download
 COPY src/server ./
 COPY src/frontend/*.js ./frontend/
 COPY src/frontend/cascii-core/cascii.html ./frontend/cascii-core/cascii.html
-
 RUN go build -v .
 
 CMD ["./cascii-server"]
