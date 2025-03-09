@@ -5,7 +5,7 @@
 Cascii Server
 </h1>
 <p align="center">
-<b>A basic webserver for hosting <a href="https://github.com/casparwylie/cascii-core">Cascii</a>, currently deployed on <a href="cascii.app">cascii.app</a></b>.
+<b>A basic webserver for hosting <a href="https://github.com/casparwylie/cascii-core">Cascii</a>, currently deployed on <a href="https://cascii.app">cascii.app</a></b>.
 <br><br>
 This allows users to create short links for later editing, save and manage drawings, for what they build using Cascii.
 The server serves <a href="https://github.com/casparwylie/cascii-core">cascii-core</a> while extending it using
