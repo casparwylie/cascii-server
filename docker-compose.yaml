@@ -1,12 +1,12 @@
 services:
-  ascii_server:
-    container_name: ascii_server
+  cascii_server:
+    container_name: cascii_server
     build:
       context: .
       target: server
     environment:
-      DB_NAME: "ascii"
-      DB_HOST: "ascii_db"
+      DB_NAME: "cascii"
+      DB_HOST: "cascii_db"
       DB_PORT: 3306
       DB_USER: "root"
       DB_PASS: "pass"
@@ -15,15 +15,15 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      ascii_db:
+      cascii_db:
         condition: service_healthy
 
-  ascii_db:
-    container_name: ascii_db
+  cascii_db:
+    container_name: cascii_db
     restart: always
     image: mysql:8.0
     environment:
-      MYSQL_DATABASE: "ascii"
+      MYSQL_DATABASE: "cascii"
       MYSQL_ROOT_PASSWORD: "pass"
     volumes:
      - ./.mysql-dev:/var/lib/mysql
@@ -41,11 +41,11 @@ services:
       context: .
       target: tests
     environment:
-      DB_NAME: "ascii_tests"
-      DB_HOST: "ascii_db"
+      DB_NAME: "cascii_tests"
+      DB_HOST: "cascii_db"
       DB_PORT: 3306
       DB_USER: "root"
       DB_PASS: "pass"
     depends_on:
-      ascii_db:
+      cascii_db:
         condition: service_healthy

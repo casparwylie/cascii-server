@@ -6,11 +6,12 @@ COPY src/go.mod src/go.sum ./
 RUN go mod download
 
 COPY src/server ./
-COPY src/frontend ./frontend
+COPY src/frontend/*.js ./frontend/
+COPY src/frontend/cascii-core/index.html ./frontend/cascii-core/
 
 RUN go build -v .
 
-CMD ["./ascii"]
+CMD ["./cascii-server"]
 
 FROM server AS tests
 

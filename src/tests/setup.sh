@@ -10,7 +10,7 @@ migrate -source file://./migrations -database \
   "mysql://${DB_USER}:${DB_PASS}@tcp(${DB_HOST}:${DB_PORT})/${DB_NAME}" up
 
 echo "Starting server..."
-./ascii &
+./cascii-server &
 
 sleep 3
 
