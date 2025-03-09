@@ -550,7 +550,17 @@ class FormComponent extends Component {
       css_width: "30%",
       on_click: async () => this.formSubmit()
     });
+    this.listenForEnter();
     return [...Object.values(this.formFieldComponents), this.formSubmitButtonComponent];
+  }
+
+  listenForEnter() {
+    document.addEventListener("keypress", (event) => {
+      if (event.key == "Enter" && this.parent.visible) {
+        event.preventDefault();
+        this.formSubmit();
+      }
+    });
   }
 
   formClear() {
