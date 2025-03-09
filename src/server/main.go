@@ -13,7 +13,7 @@ func AddMainRoutes(router *mux.Router) {
 	)
 	router.HandleFunc("/{any:.*}",
 		func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, "./frontend/cascii-core/index.html")
+			http.ServeFile(w, r, "./frontend/cascii-core/cascii.html")
 		},
 	)
 }

@@ -745,4 +745,6 @@ async function mainServerClient() {
 
 }
 
-mainServerClient(); // :)
+window.addEventListener("casciiLoaded", mainServerClient); // :)
+
+
