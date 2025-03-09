@@ -22,7 +22,7 @@ func TestCoreHtml_exists(t *testing.T) {
 }
 
 func TestStatic_exists(t *testing.T) {
-	resp, err := http.Get(BASE_URL + "static/serverLink.js")
+	resp, err := http.Get(BASE_URL + "static/serverLayer.js")
 	if err != nil {
 		panic(err)
 	}
