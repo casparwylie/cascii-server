@@ -7,7 +7,7 @@ RUN go mod download
 
 COPY src/server ./
 COPY src/frontend/*.js ./frontend/
-COPY src/frontend/cascii-core/index.html ./frontend/cascii-core/
+COPY src/frontend/cascii-core/cascii.html ./frontend/cascii-core/index.html
 
 RUN go build -v .
 
