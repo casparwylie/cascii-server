@@ -80,6 +80,6 @@ jobs:
           envs: IMAGE_NAME
           script: |
                   echo "${{ secrets.PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-                  docker system prune -a
                   docker image pull "${IMAGE_NAME}"
                   IMAGE_NAME="${IMAGE_NAME}" docker compose -f docker-compose.prod.yaml up -d
+                  docker system prune -a
