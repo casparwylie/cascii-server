@@ -1,4 +1,4 @@
-module github.com/casparwylie/ascii
+module github.com/casparwylie/cascii-server
 
 go 1.24.0
 
