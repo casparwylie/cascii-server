@@ -61,6 +61,7 @@ jobs:
             echo "DB_PASS=${{ secrets.DB_PASS}}" >> .env
             echo "DB_PORT=${{ secrets.DB_PORT}}" >> .env
             echo "DB_HOST=${{ secrets.DB_HOST}}" >> .env
+            echo "CASCII_ENV=prod" >> .env
       - name: Deploy production compose
         uses: appleboy/scp-action@master
         with:

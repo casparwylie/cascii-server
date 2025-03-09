@@ -210,7 +210,8 @@ func AuthUserHandler(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 		Value:    sessionKey,
 		HttpOnly: true,
 		Path:     "/",
-		// TODO: Secure?
+		Expires:  time.Now().Add(31536000 * time.Second), // 1 Year
+		Secure:   IsProd(),
 	}
 	http.SetCookie(w, cookie)
 	WriteGenericResponse(w, http.StatusAccepted, "")
@@ -226,6 +227,7 @@ func LogoutUserHandler(db *sql.DB, userId int, w http.ResponseWriter, r *http.Re
 		Value:    "",
 		HttpOnly: true,
 		Expires:  time.Unix(0, 0),
+		Secure:   IsProd(),
 	}
 	http.SetCookie(w, cookie)
 	WriteGenericResponse(w, http.StatusOK, "")

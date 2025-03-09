@@ -3,9 +3,14 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/mux"
 )
+
+func IsProd() bool {
+	return os.Getenv("CASCII_ENV") == "prod"
+}
 
 func AddMainRoutes(router *mux.Router) {
 	router.PathPrefix("/static/").Handler(
@@ -31,6 +36,6 @@ func main() {
 
 	http.Handle("/", router)
 
-	// TODO: Look into timeout configs
+	log.Printf("Starting server - prod: %t", IsProd())
 	log.Fatal(http.ListenAndServe(":8000", nil))
 }
