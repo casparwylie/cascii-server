@@ -66,6 +66,12 @@ class ServeExternalHookManager extends BaseExternalHookManager {
   }
 
   triggerDrawingChanged() {
+    // If there is nothing, then don't offer save option.
+    if(layerManager.layers.length == 0) {
+      drawingManager.setSaved();
+      return;
+    }
+    // Otherwise, there are legit changes to save.
     drawingManager.setUnsaved();
   }
 }
@@ -254,7 +260,6 @@ class DrawingManager {
     if (await this.ensureSave()) return;
     // A blank canvas shouldn't be saveable alone...
     this.setSaved();
-
     this.unsetCurrentDrawing();
     bodyComponent.hidePopups();
     layerManager.refresh(() => layerManager.empty());
