@@ -67,7 +67,7 @@ class ServeExternalHookManager extends BaseExternalHookManager {
 
   triggerDrawingChanged() {
     // If there is nothing, then don't offer save option.
-    if(layerManager.layers.length == 0) {
+    if (layerManager.layers.length == 0) {
       drawingManager.setSaved();
       return;
     }
@@ -258,11 +258,11 @@ class DrawingManager {
 
   async startNewDrawing() {
     if (await this.ensureSave()) return;
-    // A blank canvas shouldn't be saveable alone...
-    this.setSaved();
     this.unsetCurrentDrawing();
     bodyComponent.hidePopups();
-    layerManager.refresh(() => layerManager.empty());
+    // emptyEvent also triggers change which knows a blank canvas
+    // can't be saved (until an actual change comes in).
+    layerManager.refresh(() => layerManager.emptyEvent());
     bodyComponent.informerComponent.report("Blank canvas is ready!");
   }
 
@@ -274,8 +274,9 @@ class DrawingManager {
       bodyComponent.editDrawingMetaComponent.showAsCreator();
       return;
     }
-    this.setSaved();
-    handleResponse(await this.saveDrawing(this.getCurrentDrawing()), "Successfully saved!");
+    if (handleResponse(await this.saveDrawing(this.getCurrentDrawing()), "Successfully saved!")) {
+      this.setSaved();
+    }
   }
 
   async editMetaFormCreate(data) {
@@ -303,12 +304,11 @@ class DrawingManager {
     if (await this.ensureSave()) return;
     let response = await this.getDrawing(drawingId);
     if (handleResponse(response, "Successfully loaded!")) {
-      this.setCurrentDrawing(drawingId);
-      this.setSaved();
-      // It's important we load into localStorage too immediately as a side effect.
-      // layerManager.import currently does this impliclity with redraw.
       layerManager.import(response.data);
       bodyComponent.hidePopups();
+      // The loaded drawing is saved until a change happens
+      this.setCurrentDrawing(drawingId);
+      this.setSaved();
     }
   }
 
@@ -318,28 +318,27 @@ class DrawingManager {
     // as a new one.
     let response = await this.getDrawing(drawingId);
     if (handleResponse(response, "Successfully made duplicate. Saving this will create a new drawing.")) {
+      layerManager.import(response.data);
+      bodyComponent.hidePopups();
+
       this.unsetCurrentDrawing();
       // We setUnsaved because a user should be able to save a copy regardless of change.
       this.setUnsaved();
-      // It's important we load into localStorage too immediately as a side effect.
-      // layerManager.import currently does this impliclity with redraw.
-      layerManager.import(response.data);
-      bodyComponent.hidePopups();
     }
   }
 
   async openFromShortKey(shortKey) {
     let response = await this.getImmutableDrawing(shortKey);
     if (handleResponse(response, "Successfully loaded. This is your own version of the original to edit freely.")) {
-      this.unsetCurrentDrawing();
-
-      // A newly opened short key should always be saveable...
-      this.setUnsaved();
-
       // It's important we load into localStorage too immediately as a side effect.
       // layerManager.import currently does this impliclity with redraw.
       layerManager.import(response.data);
       bodyComponent.hidePopups();
+
+      this.unsetCurrentDrawing();
+
+      // A newly opened short key should always be saveable...
+      this.setUnsaved();
 
       // This avoids a page reload switching back to the first version, given
       // a user could have edited it (more up to date in localStorage now).
