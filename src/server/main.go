@@ -24,7 +24,6 @@ func AddMainRoutes(router *mux.Router) {
 }
 
 func main() {
-
 	dbFactory := DbFactory{maxConns: 5, maxIdleConns: 5}
 	dbClient := dbFactory.Get()
 	defer dbClient.Close()
