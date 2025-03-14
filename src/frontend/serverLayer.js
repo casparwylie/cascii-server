@@ -66,11 +66,6 @@ class ServeExternalHookManager extends BaseExternalHookManager {
   }
 
   triggerDrawingChanged() {
-    // If there is nothing, then don't offer save option.
-    if (layerManager.layers.length == 0) {
-      drawingManager.setSaved();
-      return;
-    }
     // Otherwise, there are legit changes to save.
     drawingManager.setUnsaved();
   }
@@ -222,6 +217,12 @@ class DrawingManager {
 
   setUnsaved() {
     if (!userManager.isLoggedin()) return;
+    // If there is nothing, then don't offer save option.
+    if (layerManager.layers.length == 0) {
+      drawingManager.setSaved();
+      return;
+    }
+
     localStorage.setItem("serverSaved", "");
     bodyComponent.rightMenuComponent.saveButtonComponent.show();
   }
