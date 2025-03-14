@@ -2,10 +2,14 @@ var userManager;
 var drawingManager;
 var routeManager;
 
-async function postRequest(url, data) {
+//////////////////
+////// UTILS /////
+//////////////////
+
+async function pRequest(url, data, method="POST") {
   bodyComponent.informerComponent.loading();
   let response = await fetch(url, {
-    method: "POST",
+    method: method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
@@ -15,22 +19,9 @@ async function postRequest(url, data) {
   return result;
 }
 
-async function patchRequest(url, data) {
+async function request(url, method="GET") {
   bodyComponent.informerComponent.loading();
-  let response = await fetch(url, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  var result = await response.json();
-  result.statusCode = response.status;
-  bodyComponent.informerComponent.loadingFinish();
-  return result;
-}
-
-async function getRequest(url) {
-  bodyComponent.informerComponent.loading();
-  let result = await fetch(url);
+  let result = await fetch(url, {method: method});
   let json = await result.json();
   json.statusCode = result.status;
   bodyComponent.informerComponent.loadingFinish();
@@ -38,13 +29,13 @@ async function getRequest(url) {
 }
 
 async function deleteRequest(url) {
-  bodyComponent.informerComponent.loading();
-  let result = await fetch(url, { method: "DELETE" });
-  let json = await result.json();
-  json.statusCode = result.status;
-  bodyComponent.informerComponent.loadingFinish();
-  return json;
+  return await request(url, "DELETE");
 }
+
+async function patchRequest(url, data) {
+  return await pRequest(url, data, "PATCH");
+}
+
 
 function handleResponse(response, msg = "", silentErr = false) {
   if (response.error && response.error.length > 0) {
@@ -54,6 +45,10 @@ function handleResponse(response, msg = "", silentErr = false) {
   if (msg.length > 0) bodyComponent.informerComponent.report(msg, "good");
   return true;
 }
+
+////////////////
+///// CORE /////
+////////////////
 
 class ServeExternalHookManager extends BaseExternalHookManager {
   async getShortKeyUrl() {
@@ -190,19 +185,19 @@ class UserManager {
   }
 
   async getUser() {
-    return await getRequest("/api/user/");
+    return await request("/api/user/");
   }
 
   async logoutUser() {
-    return await getRequest("/api/user/logout");
+    return await request("/api/user/logout");
   }
 
   async loginUser(data) {
-    return await postRequest("/api/user/auth", data);
+    return await pRequest("/api/user/auth", data);
   }
 
   async signupUser(data) {
-    return await postRequest("/api/user/", data);
+    return await pRequest("/api/user/", data);
   }
 }
 
@@ -360,15 +355,15 @@ class DrawingManager {
   }
 
   async getDrawings() {
-    return (await getRequest("/api/drawings/mutables")).results || [];
+    return (await request("/api/drawings/mutables")).results || [];
   }
 
   async getDrawing(drawingId) {
-    return await getRequest("/api/drawings/mutable/" + drawingId);
+    return await request("/api/drawings/mutable/" + drawingId);
   }
 
   async getImmutableDrawing(shortKey) {
-    return await getRequest("/api/drawings/immutable/" + shortKey);
+    return await request("/api/drawings/immutable/" + shortKey);
   }
 
   async deleteDrawing(drawingId) {
@@ -386,12 +381,12 @@ class DrawingManager {
 
   async createDrawing(data) {
     data = { ...data, data: layerManager.encodeAll() };
-    return await postRequest("/api/drawings/mutable", data);
+    return await pRequest("/api/drawings/mutable", data);
   }
 
   async createImmutableDrawing() {
     let data = { data: layerManager.encodeAll() };
-    return await postRequest("/api/drawings/immutable", data);
+    return await pRequest("/api/drawings/immutable", data);
   }
 }
 
