@@ -130,22 +130,22 @@ class UserManager {
   }
 
   renderLogin() {
-    this.userOnlyComponents().forEach((component) => component.show());
-    this.guestOnlyComponents().forEach((component) => component.hide());
+    this.userOnlyComponents().forEach(component => component.show());
+    this.guestOnlyComponents().forEach(component => component.hide());
     let username = this.getUsername();
     bodyComponent.rightMenuComponent.welcomeMsgComponent.setValue("Welcome, " + username);
   }
 
   renderLogout() {
-    this.userOnlyComponents().forEach((component) => component.hide());
-    this.guestOnlyComponents().forEach((component) => component.show());
+    this.userOnlyComponents().forEach(component => component.hide());
+    this.guestOnlyComponents().forEach(component => component.show());
   }
 
   hideAll() {
     // This is used so that components don't briefly appear before API calls
     // on page load.
-    this.userOnlyComponents().forEach((component) => component.hide());
-    this.guestOnlyComponents().forEach((component) => component.hide());
+    this.userOnlyComponents().forEach(component => component.hide());
+    this.guestOnlyComponents().forEach(component => component.hide());
   }
 
   async signup(data) {
@@ -502,7 +502,7 @@ class EditDrawingMetaComponent extends PopupComponent {
       new FormComponent({
         accessibleBy: "formComponent",
         formFields: { name: "Name" },
-        formOnSubmit: (data) => this.createOrUpdate(data),
+        formOnSubmit: data => this.createOrUpdate(data),
         formSubmitValue: "Save!",
         formFieldProps: {
           css_width: "100%",
@@ -593,7 +593,7 @@ class FormComponent extends Component {
   }
 
   listenForEnter() {
-    document.addEventListener("keypress", (event) => {
+    document.addEventListener("keypress", event => {
       if (event.key == "Enter" && this.parent.visible) {
         event.preventDefault();
         this.formSubmit();
@@ -635,7 +635,7 @@ class UserSignUpComponent extends PopupComponent {
       new FormComponent({
         accessibleBy: "formComponent",
         formFields: { email: "Email", password: "Password" },
-        formOnSubmit: (data) => userManager.signup(data),
+        formOnSubmit: data => userManager.signup(data),
         formSubmitValue: "Sign Up",
         formFieldProps: {
           css_width: "100%",
@@ -671,7 +671,7 @@ class UserLoginComponent extends PopupComponent {
       new FormComponent({
         accessibleBy: "formComponent",
         formFields: { email: "Email", password: "Password" },
-        formOnSubmit: (data) => userManager.login(data),
+        formOnSubmit: data => userManager.login(data),
         formSubmitValue: "Login",
         formFieldProps: {
           css_width: "100%",
@@ -771,7 +771,7 @@ async function mainServerClient() {
   // Render drawing related UI
   drawingManager.update();
 
-  routeManager.addRoutes([/^\/(?<shortkey>[\w]+)$/, (vars) => drawingManager.openFromShortKey(vars.shortkey)]);
+  routeManager.addRoutes([/^\/(?<shortkey>[\w]+)$/, vars => drawingManager.openFromShortKey(vars.shortkey)]);
   routeManager.handle();
 }
 
