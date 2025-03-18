@@ -540,21 +540,6 @@ class EditDrawingMetaComponent extends PopupComponent {
   }
 }
 
-class InputComponent extends Component {
-  type = "input";
-
-  css_height = "40px";
-  css_border = "1px solid";
-  css_borderRadius = "10px";
-  css_fontFamily = "bodyFont";
-  css_outline = "none";
-
-  defineTheme() {
-    this.css("backgroundColor", "buttonBgColor");
-    this.css("borderColor", "buttonBorderColor");
-    this.css("color", "buttonFgColor");
-  }
-}
 
 class FormComponent extends Component {
   // Example usage...
