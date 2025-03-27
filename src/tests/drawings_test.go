@@ -93,19 +93,56 @@ func TestCreateImmutableDrawing_realConflict(t *testing.T) {
 func TestGetImmutableDrawing_successful(t *testing.T) {
 	clearDb()
 	var respBody1 CreateImmutableDrawingResponse
-	resp := Post(
+	Post(
 		DRAWINGS_API+"immutable",
 		CreateImmutableDrawingRequest{Data: "{\"test\": \"test\"}"},
 		&respBody1,
 	)
 	var respBody2 GetImmutableDrawingResponse
-	resp = Get(
+	resp := Get(
 		DRAWINGS_API+"immutable/"+respBody1.ShortKey,
 		&respBody2,
 	)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "{\"test\": \"test\"}", respBody2.Data)
+	assert.Equal(t, 2, respBody2.Hits)
 	assert.NotEmpty(t, respBody2.CreatedAt)
+}
+
+func TestGetImmutableDrawing_hits(t *testing.T) {
+	clearDb()
+	var respBody1 CreateImmutableDrawingResponse
+	var respBody2 CreateImmutableDrawingResponse
+	Post(
+		DRAWINGS_API+"immutable",
+		CreateImmutableDrawingRequest{Data: "{\"test\": \"test\"}"},
+		&respBody1,
+	)
+	Post(
+		DRAWINGS_API+"immutable",
+		CreateImmutableDrawingRequest{Data: "{\"this must be different\": \"test\"}"},
+		&respBody2,
+	)
+	var respBody3 GetImmutableDrawingResponse
+	var respBody4 GetImmutableDrawingResponse
+	Get(
+		DRAWINGS_API+"immutable/"+respBody1.ShortKey,
+		&GetImmutableDrawingResponse{},
+	)
+	Get(
+		DRAWINGS_API+"immutable/"+respBody1.ShortKey,
+		&GetImmutableDrawingResponse{},
+	)
+	Get(
+		DRAWINGS_API+"immutable/"+respBody1.ShortKey,
+		&respBody3,
+	)
+	Get(
+		DRAWINGS_API+"immutable/"+respBody2.ShortKey,
+		&respBody4,
+	)
+	assert.Equal(t, 4, respBody3.Hits)
+	assert.Equal(t, 2, respBody4.Hits)
 }
 
 func TestGetImmutableDrawing_notFound(t *testing.T) {
