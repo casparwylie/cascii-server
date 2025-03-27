@@ -51,14 +51,29 @@ func CreateImmutableDrawing(db *sql.DB, data string) (string, error) {
 	return "", err
 }
 
-func GetImmutableDrawing(db *sql.DB, shortKey string) (string, string, error) {
+func GetImmutableDrawing(db *sql.DB, shortKey string) (string, int, string, error) {
 	var data string
+	var hits int
 	var createdAt string
-	err := db.QueryRow("SELECT data, created_at FROM immutable_drawings WHERE short_key = ?", shortKey).Scan(&data, &createdAt)
+	err := db.QueryRow("SELECT data, hits, created_at FROM immutable_drawings WHERE short_key = ?", shortKey).Scan(&data, &hits, &createdAt)
 	if err == nil || err == sql.ErrNoRows {
-		return data, createdAt, nil
+		return data, hits, createdAt, nil
 	}
-	return data, createdAt, err
+	return data, hits, createdAt, err
+}
+
+func IncrementImmutableDrawingHits(db *sql.DB, shortKey string) (bool, error) {
+	res, err := db.Exec(
+		"UPDATE immutable_drawings SET hits = hits + 1 WHERE short_key = ?", shortKey,
+	)
+	if err != nil {
+		return false, err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return affected == 1, nil
 }
 
 func CreateMutableDrawing(db *sql.DB, data string, name string, userId int) (int, error) {

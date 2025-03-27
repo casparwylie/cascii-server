@@ -46,6 +46,7 @@ type CreateImmutableDrawingResponse struct {
 
 type GetImmutableDrawingResponse struct {
 	Data      string `json:"data"`
+	Hits      int    `json:"hits"`
 	CreatedAt string `json:"created_at"`
 }
 
@@ -251,7 +252,14 @@ func CreateImmutableDrawingHandler(db *sql.DB, w http.ResponseWriter, r *http.Re
 
 func GetImmutableDrawingHandler(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	shortKey := mux.Vars(r)["short_key"]
-	data, createdAt, err := GetImmutableDrawing(db, shortKey)
+
+	// This is a side effect. if it fails, don't worry so much but log.
+	_, err := IncrementImmutableDrawingHits(db, shortKey)
+	if err != nil {
+		log.Print(err)
+	}
+
+	data, hits, createdAt, err := GetImmutableDrawing(db, shortKey)
 	if err != nil {
 		WriteUnknownError(w, err)
 		return
@@ -260,7 +268,8 @@ func GetImmutableDrawingHandler(db *sql.DB, w http.ResponseWriter, r *http.Reque
 		WriteGenericResponse(w, http.StatusNotFound, "Drawing not found")
 		return
 	}
-	WriteStructuredResponse(w, http.StatusOK, GetImmutableDrawingResponse{Data: data, CreatedAt: createdAt})
+	response := GetImmutableDrawingResponse{Data: data, Hits: hits, CreatedAt: createdAt}
+	WriteStructuredResponse(w, http.StatusOK, response)
 }
 
 func CreateMutableDrawingHandler(db *sql.DB, userId int, w http.ResponseWriter, r *http.Request) {
