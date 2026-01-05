@@ -41,7 +41,7 @@ services:
       context: .
       target: tests
     environment:
-      DB_NAME: "cascii_tests"
+      DB_NAME: "cascii"
       DB_HOST: "cascii_db"
       DB_PORT: 3306
       DB_USER: "root"
