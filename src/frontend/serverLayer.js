@@ -729,6 +729,13 @@ class RightMenuComponent extends MenuComponent {
       on_click: async () => await bodyComponent.listDrawingsComponent.toggle(),
       css_width: "100%",
     }),
+    new MenuButtonComponent({
+      value: "Buy me a coffee",
+      on_click: async () => window.open("https://buymeacoffee.com/casparwylie", "_blank").focus(),
+      Css_backgroundColor: "#FFDD00",
+      Css_color: "black",
+      css_width: "100%",
+    }),
   ];
 }
 
