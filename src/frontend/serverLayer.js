@@ -724,7 +724,7 @@ class RightMenuComponent extends MenuComponent {
       Css_marginTop: "20px",
     }),
     new MenuButtonComponent({
-      value: "My Drawings",
+      value: "Your Drawings",
       accessibleBy: "myDrawingsButtonComponent",
       on_click: async () => await bodyComponent.listDrawingsComponent.toggle(),
       css_width: "100%",
