@@ -730,7 +730,7 @@ class RightMenuComponent extends MenuComponent {
       css_width: "100%",
     }),
     new MenuButtonComponent({
-      value: "Buy me a coffee",
+      value: "Buy me a beer",
       on_click: async () => window.open("https://buymeacoffee.com/casparwylie", "_blank").focus(),
       Css_backgroundColor: "#FFDD00",
       Css_color: "black",
